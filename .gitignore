@@ -24,3 +24,11 @@ venv/
 node_modules/
 dist/
 build/
+
+# Rust / Tauri
+app/src-tauri/target/
+app/src-tauri/gen/
+target/
+
+# Node (app)
+app/node_modules/
