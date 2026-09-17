@@ -1,0 +1,58 @@
+# Builds the Ghost Typer shell natively on real Windows and macOS runners,
+# then uploads the installers as downloadable artifacts. This is how we get a
+# Windows .exe/.msi and a macOS .app/.dmg without a local cross-compile.
+name: Build desktop shell
+
+on:
+  workflow_dispatch: {}          # lets you trigger it by hand from the Actions tab
+  push:
+    branches: [dev]
+    paths:
+      - "app/**"
+      - ".github/workflows/build.yml"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Rust toolchain + a build cache so re-runs are fast.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      - name: Install JS deps (Tauri CLI)
+        working-directory: app
+        run: npm install
+
+      - name: Generate icon set
+        working-directory: app
+        run: npm run icons
+
+      - name: Build app
+        working-directory: app
+        run: npm run build
+
+      # Collect the platform installers. Windows -> .msi/.exe, macOS -> .app/.dmg.
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-typer-${{ matrix.name }}
+          path: |
+            app/src-tauri/target/release/bundle/**/*
+            app/src-tauri/target/release/*.exe
+          if-no-files-found: warn
