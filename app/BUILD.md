@@ -108,6 +108,18 @@ is steadier. The setting is remembered between runs.
   into an app running **as administrator** unless TypeIT is elevated too.
 - Show/hide TypeIT anytime with **Ctrl+Shift+Space**.
 
+## 4d. Logs (for troubleshooting)
+
+TypeIT writes a log file on startup and while running:
+
+- **Windows:** `%APPDATA%\com.typeit.app\logs\typeit.log`
+  (paste `%APPDATA%\com.typeit.app\logs` into Explorer's address bar)
+- **macOS:** `~/Library/Logs/com.typeit.app/typeit.log`
+
+It records whether the window was shown, whether the global shortcuts
+registered (a clash is logged, not fatal), and each typing attempt. If the
+window doesn't appear, this file says why.
+
 ## 5. Build a distributable
 
 ```bash

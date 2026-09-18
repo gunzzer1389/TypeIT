@@ -61,6 +61,24 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — Startup robustness + file logging (diagnostics)
+
+- **Reported:** first native run — "don't see it anywhere" (window absent),
+  can't type, can't find the Deepgram link.
+- **Root-cause suspects:** (1) `setup` used `?` on shortcut registration, so a
+  hotkey clash (Ctrl+Shift+Space / +Enter already owned) would abort startup and
+  show no window; (2) app installed but not launched; (3) transparent window not
+  compositing. The Deepgram link is in the in-flow settings panel *under* the
+  widget (shown by default; ~380 px down) — reachable once the window shows.
+- **Fixes/diagnostics shipped:** shortcut registration is now non-fatal (logged,
+  app continues); `setup` explicitly `show()/unminimize()/set_focus()` the main
+  window and logs `visible=`; panic hook logs to the log file; added
+  `tauri-plugin-log` (+ `log`) writing to the app log dir and stdout; typing
+  paths log enigo init/typing errors. Log paths documented in `BUILD.md`.
+- **Next:** user runs this build, sends `typeit.log`; if it shows
+  `visible=Ok(true)` but still nothing on screen → transparency/compositor, flip
+  `transparent`/add windowEffects.
+
 ## 2026-09-18 — Deepgram key moved into Settings + "Get a key" link
 
 - **Key management now lives in the gear/settings popover** (renamed aria-label

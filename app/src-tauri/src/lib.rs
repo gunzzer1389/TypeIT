@@ -20,6 +20,7 @@ use std::time::Duration;
 use enigo::{Enigo, Keyboard, Settings};
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_log::{Target, TargetKind};
 use tauri_plugin_opener::OpenerExt;
 
 /// The most recent transcript the frontend pushed down, so the global "type it"
@@ -50,12 +51,19 @@ fn type_string_at(text: &str, wpm: u32) -> Result<(), String> {
         return Err("Nothing to type".into());
     }
     let delay = per_char_delay(wpm);
-    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
+        log::error!("enigo init failed: {e}");
+        e.to_string()
+    })?;
     let mut buf = [0u8; 4];
     for ch in text.chars() {
-        enigo.text(ch.encode_utf8(&mut buf)).map_err(|e| e.to_string())?;
+        enigo.text(ch.encode_utf8(&mut buf)).map_err(|e| {
+            log::error!("enigo type failed: {e}");
+            e.to_string()
+        })?;
         std::thread::sleep(delay);
     }
+    log::info!("typed {} chars at {} wpm", text.chars().count(), wpm);
     Ok(())
 }
 
@@ -114,7 +122,26 @@ pub fn run() {
     // click into your target (email, chat, comment box).
     let type_it = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Enter);
 
+    // Log panics to the log file too, so a startup crash leaves a trace.
+    std::panic::set_hook(Box::new(|info| {
+        log::error!("PANIC: {info}");
+        eprintln!("PANIC: {info}");
+    }));
+
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    // Windows: %APPDATA%\com.typeit.app\logs\typeit.log
+                    // macOS:   ~/Library/Logs/com.typeit.app/typeit.log
+                    Target::new(TargetKind::LogDir {
+                        file_name: Some("typeit".into()),
+                    }),
+                ])
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -156,8 +183,31 @@ pub fn run() {
         .manage(PendingText(Mutex::new(String::new())))
         .manage(Wpm(Mutex::new(WPM_DEFAULT)))
         .setup(move |app| {
-            app.global_shortcut().register(toggle)?;
-            app.global_shortcut().register(type_it)?;
+            log::info!("TypeIT setup: starting");
+
+            // Register shortcuts but DON'T let a clash abort startup — if
+            // another app owns the combo, we log it and carry on so the
+            // window still appears.
+            match app.global_shortcut().register(toggle) {
+                Ok(_) => log::info!("registered show/hide (Ctrl+Shift+Space)"),
+                Err(e) => log::error!("show/hide shortcut not registered: {e}"),
+            }
+            match app.global_shortcut().register(type_it) {
+                Ok(_) => log::info!("registered type-it (Ctrl+Shift+Enter)"),
+                Err(e) => log::error!("type-it shortcut not registered: {e}"),
+            }
+
+            // Make sure the window is actually shown, unminimized, and focused.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+                log::info!("main window shown; visible={:?}", win.is_visible());
+            } else {
+                log::error!("main window 'main' NOT FOUND");
+            }
+
+            log::info!("TypeIT setup: done");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
