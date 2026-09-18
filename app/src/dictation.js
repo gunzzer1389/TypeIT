@@ -418,11 +418,17 @@
     if (resumeBtn) resumeBtn.hidden = !show;
   }
 
+  // When a job ends, clicking Stop had already activated our window (which the
+  // focus watcher reads as "left the target" and auto-stops). Record the end
+  // time so the SAME click can't fall through and start a fresh job.
+  var lastEndAt = 0;
+
   // Apply the result of a typing pass. The transcript is NEVER overwritten, so
   // "Type it" always re-types the whole thing from the start; the untyped
   // remainder lives in the backend and is replayed by Resume.
   function handleOutcome(o) {
     setTypingUI(false);
+    lastEndAt = Date.now();
     if (!o || o.reason === "done") {
       showResume(false);
       setStatus("Typed", "live");
@@ -446,12 +452,20 @@
   }
 
   if (typeBtn) {
+    // Catch Stop on mousedown too, so CANCEL is set before the focus watcher
+    // reacts to our window activating — this makes Stop land cleanly.
+    typeBtn.addEventListener("mousedown", function () {
+      if (isTyping && invoke) invoke("stop_typing").catch(function () {});
+    });
     typeBtn.addEventListener("click", async function () {
       // While typing, the button is Stop — end the whole job.
       if (isTyping) {
         if (invoke) invoke("stop_typing").catch(function () {});
         return;
       }
+      // Ignore the click that just ended a job (it's the same gesture that hit
+      // Stop / took focus back) so it can't restart typing from the top.
+      if (Date.now() - lastEndAt < 500) return;
       var text = transcriptEl.value.trim();
       if (!text) { setStatus("Nothing to type", "error"); return; }
       if (!invoke) { setStatus("Type-it needs the desktop app", "error"); return; }

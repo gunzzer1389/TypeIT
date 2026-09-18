@@ -67,6 +67,17 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — Fix: Stop was restarting from the top
+
+- **Bug:** with stay-visible typing, clicking the Stop button activated our
+  window → focus watcher read it as focus_lost → auto-stopped and flipped the
+  button back to "Type it" → the same click then started a fresh job from the
+  top.
+- **Fix (dictation.js):** call `stop_typing` on the button's `mousedown` (so
+  CANCEL is set before the focus watcher reacts), and swallow any Type-it click
+  within 500 ms of a job ending (`lastEndAt`) so the stopping gesture can't fall
+  through into a restart. `isTyping` stop-check kept.
+
 ## 2026-09-18 — Type it→Stop toggle actually visible (stay-visible typing)
 
 - **Bug:** the Type it→Stop toggle never showed because the button path *hid* the
