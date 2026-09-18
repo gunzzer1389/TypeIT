@@ -13,8 +13,8 @@
  * applications. The Deepgram API key is stored locally (localStorage) on this
  * machine and sent only to Deepgram.
  *
- * Next step (not built here): deliver the reviewed text as keystrokes into the
- * window you have focused. For now, Copy puts it on the clipboard.
+ * The reviewed text is delivered as keystrokes into the window you have focused
+ * (Type it / Ctrl+Shift+Enter), with Stop and Resume for long passes.
  * ------------------------------------------------------------------------- */
 (function () {
   "use strict";
@@ -36,7 +36,6 @@
   var micLabel     = document.getElementById("micLabel");
   var statusEl     = document.getElementById("dictStatus");
   var clearBtn     = document.getElementById("clearBtn");
-  var copyBtn      = document.getElementById("copyBtn");
   var keyInput     = document.getElementById("keyInput");
   var keySave      = document.getElementById("keySave");
   var keyStatus    = document.getElementById("keyStatus");
@@ -307,22 +306,6 @@
     });
   }
 
-  if (copyBtn) {
-    copyBtn.addEventListener("click", async function () {
-      var text = transcriptEl.value.trim();
-      if (!text) { setStatus("Nothing to copy", "error"); return; }
-      try {
-        await navigator.clipboard.writeText(text);
-        setStatus("Copied", "live");
-      } catch (_) {
-        // Fallback for webviews without the async clipboard API.
-        transcriptEl.select();
-        try { document.execCommand("copy"); setStatus("Copied", "live"); }
-        catch (e2) { setStatus("Copy failed", "error"); }
-      }
-    });
-  }
-
   // ---------------------------------------------------------------------
   // Type into the focused window (Tauri only).
   //
@@ -394,12 +377,17 @@
   }
 
   var stopBtn = document.getElementById("stopBtn");
+  var resumeBtn = document.getElementById("resumeBtn");
 
   // While typing: disable Type it (prevents the double-trigger that scrambles
-  // output) and reveal Stop.
+  // output), hide Resume, and reveal Stop.
   function setTypingUI(on) {
     if (typeBtn) typeBtn.disabled = on;
     if (stopBtn) stopBtn.hidden = !on;
+    if (on && resumeBtn) resumeBtn.hidden = true;
+  }
+  function showResume(show) {
+    if (resumeBtn) resumeBtn.hidden = !show;
   }
 
   if (stopBtn) {
@@ -408,26 +396,27 @@
     });
   }
 
-  // Apply the result of a typing pass (from the button's return value or, for
-  // the hotkey path, the "type-outcome" event).
+  // Apply the result of a typing pass. The transcript is NEVER overwritten, so
+  // "Type it" always re-types the whole thing from the start; the untyped
+  // remainder lives in the backend and is replayed by Resume.
   function handleOutcome(o) {
     setTypingUI(false);
-    if (!o || o.reason === "done") { setStatus("Typed", "live"); return; }
-    // stopped or focus_lost: the untyped remainder is ready to resume.
-    if (typeof o.remaining === "string") {
-      transcriptEl.value = o.remaining;
-      if (invoke) invoke("set_pending_text", { text: o.remaining }).catch(function () {});
+    if (!o || o.reason === "done") {
+      showResume(false);
+      setStatus("Typed", "live");
+      return;
     }
+    var left = o.remaining ? Array.from(o.remaining).length : 0;
+    showResume(left > 0);
     if (o.reason === "focus_lost") {
-      setStatus("Paused — you switched windows. Click your app, then Ctrl+Shift+Enter to resume.", "error");
+      setStatus("Paused · " + left + " left — click your app, then Resume (Ctrl+Shift+R)", "error");
     } else {
-      var left = o.remaining ? Array.from(o.remaining).length : 0;
-      setStatus("Stopped · " + left + " left", "error");
+      setStatus("Stopped · " + left + " left — Resume to continue, or Type it to restart", "error");
     }
   }
 
-  // Hotkey-path typing reports back through an event; the button path uses the
-  // command's return value below.
+  // Hotkey-path typing/resume reports back through an event; the button paths
+  // use the command return value below.
   if (tauri && tauri.event && tauri.event.listen) {
     tauri.event.listen("type-outcome", function (e) { handleOutcome(e.payload); });
   }
@@ -444,6 +433,7 @@
       setStatus("Typing…");
       try {
         await invoke("set_pending_text", { text: text });
+        // type_text always types the full text from the start.
         var outcome = await invoke("type_text", { text: text, minWpm: r[0], maxWpm: r[1] });
         handleOutcome(outcome);
       } catch (err) {
@@ -451,6 +441,23 @@
         var msg = String(err);
         setStatus(msg.indexOf("Already") >= 0 ? "Already typing" : "Type failed", "error");
         console.error("type_text failed:", err);
+      }
+    });
+  }
+
+  if (resumeBtn) {
+    resumeBtn.addEventListener("click", async function () {
+      if (!invoke) return;
+      var r = currentRange();
+      setTypingUI(true);
+      setStatus("Resuming…");
+      try {
+        var outcome = await invoke("resume_typing", { minWpm: r[0], maxWpm: r[1] });
+        handleOutcome(outcome);
+      } catch (err) {
+        setTypingUI(false);
+        setStatus(String(err).indexOf("Nothing") >= 0 ? "Nothing to resume" : "Resume failed", "error");
+        console.error("resume_typing failed:", err);
       }
     });
   }

@@ -67,6 +67,25 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — UI cleanup + fix resume repeat/skip, redo-from-start
+
+- **Mojibake fix:** page had no charset, so the WebView decoded UTF-8 as Latin-1
+  (`â—`, `â€"`). Added `<!doctype html>` + `<meta charset="utf-8">` (+ viewport).
+- **Disclaimer moved into Settings** as an "About & shortcuts" block; removed the
+  always-on-screen paragraph and the stale mockup "keyboard shortcut" card.
+  Removed the **Copy** button.
+- **Resume rework (fixes repeat + can't-redo-from-first):** the transcript is no
+  longer overwritten with the remainder. `Resume(Mutex<String>)` state holds the
+  exact untyped remainder (set via `remember_resume` after every pass; cleared on
+  "done"). **Type it / Ctrl+Shift+Enter** always types the full box from the
+  start (redo). **Resume** button + **Ctrl+Shift+R** replay only the remainder —
+  no frontend race (was: async `set_pending_text` vs. hotkey), no repeat/skip.
+  New `resume_typing` command.
+- **Skip fix:** focus check is now **per-process** (`foreground_pid` via
+  `GetWindowThreadProcessId`) not per-HWND, so same-app popups don't trigger
+  false focus-loss stops; button/resume settle delay bumped 250→400 ms so the
+  first characters aren't dropped before focus returns.
+
 ## 2026-09-18 — Auto-stop when focus leaves the target (Windows)
 
 - **Windows foreground detection:** `windows` crate (`Win32_UI_WindowsAndMessaging`)

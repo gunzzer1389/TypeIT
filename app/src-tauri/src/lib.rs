@@ -37,6 +37,23 @@ struct PendingText(Mutex<String>);
 /// with natural, human-looking variation.
 struct SpeedRange(Mutex<(u32, u32)>);
 
+/// The still-untyped remainder from the last interrupted pass (Stop or focus
+/// loss). Resume replays exactly this, so continuing never repeats or skips.
+struct Resume(Mutex<String>);
+
+/// Store the remainder after a pass: keep it if interrupted, clear if finished.
+fn remember_resume(app: &tauri::AppHandle, outcome: &TypeOutcome) {
+    if let Some(state) = app.try_state::<Resume>() {
+        if let Ok(mut guard) = state.0.lock() {
+            *guard = if outcome.reason == "done" {
+                String::new()
+            } else {
+                outcome.remaining.clone()
+            };
+        }
+    }
+}
+
 /// Sensible bounds: below ~10 wpm is uselessly slow, and 1000 wpm is already
 /// close to "as fast as the target app can keep up".
 const WPM_MIN: u32 = 10;
@@ -113,15 +130,26 @@ struct TypeOutcome {
     remaining: String,
 }
 
-/// Handle (as an integer) of the window that currently has focus. Used to
-/// detect the user switching away from the target mid-type. 0 = unknown.
+/// Process id of the window that currently has focus. We compare by *process*
+/// (not window handle) so the target app's own popups — autocomplete, emoji
+/// pickers, suggestion bars — don't look like "you switched away". 0 = unknown.
 #[cfg(windows)]
-fn foreground_window() -> isize {
-    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    unsafe { GetForegroundWindow().0 as isize }
+fn foreground_pid() -> u32 {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId,
+    };
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return 0;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid as *mut u32));
+        pid
+    }
 }
 #[cfg(not(windows))]
-fn foreground_window() -> isize {
+fn foreground_pid() -> u32 {
     0 // focus-aware stop is Windows-only for now
 }
 
@@ -152,8 +180,9 @@ fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<TypeOutco
     };
 
     let (lo, hi) = normalize_range(min_wpm, max_wpm);
-    // The window the user is typing into. If focus moves away from it, stop.
-    let target = foreground_window();
+    // The app (process) the user is typing into. If focus moves to a different
+    // process, stop — but same-process popups don't count.
+    let target_pid = foreground_pid();
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
         log::error!("enigo init failed: {e}");
         e.to_string()
@@ -166,8 +195,8 @@ fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<TypeOutco
             log::info!("typing stopped after {typed} chars");
             return Ok(outcome(typed, "stopped"));
         }
-        if target != 0 && foreground_window() != target {
-            log::info!("focus left target; paused after {typed} chars");
+        if target_pid != 0 && foreground_pid() != target_pid {
+            log::info!("focus left target app; paused after {typed} chars");
             return Ok(outcome(typed, "focus_lost"));
         }
         enigo.text(ch.encode_utf8(&mut buf)).map_err(|e| {
@@ -218,6 +247,7 @@ fn set_speed_range(min_wpm: u32, max_wpm: u32, state: tauri::State<SpeedRange>) 
 /// blocking thread so neither the sleep nor the typing freezes the UI.
 #[tauri::command]
 async fn type_text(
+    app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     text: String,
     min_wpm: u32,
@@ -225,13 +255,46 @@ async fn type_text(
 ) -> Result<TypeOutcome, String> {
     let _ = window.hide();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        std::thread::sleep(Duration::from_millis(250));
+        // Give focus a beat to return to the previous app before we start, so
+        // the first characters don't get dropped.
+        std::thread::sleep(Duration::from_millis(400));
         type_string_range(&text, min_wpm, max_wpm)
     })
     .await
     .map_err(|e| e.to_string())??;
+    remember_resume(&app, &outcome);
     // If focus wandered off, bring TypeIT back so the user sees the pause and
     // the remaining text (with a hint to click into their app and resume).
+    if outcome.reason == "focus_lost" {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    Ok(outcome)
+}
+
+/// Resume the last interrupted pass: type only the stored remainder.
+#[tauri::command]
+async fn resume_typing(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    min_wpm: u32,
+    max_wpm: u32,
+) -> Result<TypeOutcome, String> {
+    let text = app
+        .try_state::<Resume>()
+        .and_then(|s| s.0.lock().ok().map(|g| g.clone()))
+        .unwrap_or_default();
+    if text.trim().is_empty() {
+        return Err("Nothing to resume".into());
+    }
+    let _ = window.hide();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(Duration::from_millis(400));
+        type_string_range(&text, min_wpm, max_wpm)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    remember_resume(&app, &outcome);
     if outcome.reason == "focus_lost" {
         let _ = window.show();
         let _ = window.set_focus();
@@ -257,6 +320,8 @@ pub fn run() {
     // Stop the in-flight typing from anywhere (the window is hidden while the
     // button types, so Stop has to be global).
     let stop_it = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Backspace);
+    // Resume the last interrupted pass (types only the remainder).
+    let resume_it = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyR);
 
     // Log panics to the log file too, so a startup crash leaves a trace.
     std::panic::set_hook(Box::new(|info| {
@@ -310,6 +375,33 @@ pub fn run() {
                     } else if shortcut == &stop_it {
                         CANCEL.store(true, Ordering::SeqCst);
                         log::info!("stop via hotkey");
+                    } else if shortcut == &resume_it {
+                        let text = app
+                            .try_state::<Resume>()
+                            .and_then(|s| s.0.lock().ok().map(|g| g.clone()))
+                            .unwrap_or_default();
+                        if text.trim().is_empty() {
+                            log::info!("resume hotkey: nothing to resume");
+                        } else {
+                            let (lo, hi) = app
+                                .try_state::<SpeedRange>()
+                                .and_then(|s| s.0.lock().ok().map(|g| *g))
+                                .unwrap_or((DEFAULT_MIN, DEFAULT_MAX));
+                            let app_handle = app.clone();
+                            std::thread::spawn(move || match type_string_range(&text, lo, hi) {
+                                Ok(outcome) => {
+                                    remember_resume(&app_handle, &outcome);
+                                    if outcome.reason == "focus_lost" {
+                                        if let Some(win) = app_handle.get_webview_window("main") {
+                                            let _ = win.show();
+                                            let _ = win.set_focus();
+                                        }
+                                    }
+                                    let _ = app_handle.emit("type-outcome", outcome);
+                                }
+                                Err(e) => log::warn!("hotkey resume: {e}"),
+                            });
+                        }
                     } else if shortcut == &type_it {
                         // Target app is already focused (you clicked into it),
                         // so type straight away — no hide needed. Do it on its
@@ -325,6 +417,7 @@ pub fn run() {
                         let app_handle = app.clone();
                         std::thread::spawn(move || match type_string_range(&text, lo, hi) {
                             Ok(outcome) => {
+                                remember_resume(&app_handle, &outcome);
                                 if outcome.reason == "focus_lost" {
                                     if let Some(win) = app_handle.get_webview_window("main") {
                                         let _ = win.show();
@@ -341,6 +434,7 @@ pub fn run() {
         )
         .manage(PendingText(Mutex::new(String::new())))
         .manage(SpeedRange(Mutex::new((DEFAULT_MIN, DEFAULT_MAX))))
+        .manage(Resume(Mutex::new(String::new())))
         .setup(move |app| {
             log::info!("TypeIT setup: starting");
 
@@ -368,6 +462,10 @@ pub fn run() {
             match app.global_shortcut().register(stop_it) {
                 Ok(_) => log::info!("registered stop (Ctrl+Shift+Backspace)"),
                 Err(e) => log::error!("stop shortcut not registered: {e}"),
+            }
+            match app.global_shortcut().register(resume_it) {
+                Ok(_) => log::info!("registered resume (Ctrl+Shift+R)"),
+                Err(e) => log::error!("resume shortcut not registered: {e}"),
             }
 
             // System tray: gives the app a real Quit (window close only hides),
@@ -426,6 +524,7 @@ pub fn run() {
             set_pending_text,
             set_speed_range,
             type_text,
+            resume_typing,
             stop_typing
         ])
         .run(tauri::generate_context!())
