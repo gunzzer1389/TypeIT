@@ -107,6 +107,12 @@ is steadier. The setting is remembered between runs.
 - **Windows:** `SendInput` works without special permission, but it can't type
   into an app running **as administrator** unless TypeIT is elevated too.
 - Show/hide TypeIT anytime with **Ctrl+Shift+Space**.
+- **Quitting:** closing the window only *hides* it (reopen with the hotkey). To
+  fully quit, use the **system tray** icon → **Quit TypeIT**. Fully quitting
+  matters before installing an update, since a running copy locks its files.
+- **Updating:** quit the old copy (tray → Quit), then run the new installer; the
+  version bump lets it replace the previous install. Only one TypeIT runs at a
+  time — launching a second copy just focuses the existing window.
 
 ## 4d. Logs (for troubleshooting)
 

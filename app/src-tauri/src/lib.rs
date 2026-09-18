@@ -18,6 +18,8 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use enigo::{Enigo, Keyboard, Settings};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_log::{Target, TargetKind};
@@ -129,6 +131,16 @@ pub fn run() {
     }));
 
     tauri::Builder::default()
+        // Must be the FIRST plugin. If a second copy of TypeIT is launched,
+        // focus the running window instead of opening another instance.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            log::info!("second instance launched; focusing existing window");
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+        }))
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -195,6 +207,41 @@ pub fn run() {
             match app.global_shortcut().register(type_it) {
                 Ok(_) => log::info!("registered type-it (Ctrl+Shift+Enter)"),
                 Err(e) => log::error!("type-it shortcut not registered: {e}"),
+            }
+
+            // System tray: gives the app a real Quit (window close only hides),
+            // plus a Show/Hide toggle. Without a way to quit, an old instance
+            // lingers in the background and locks its files against upgrades.
+            let show_item = MenuItem::with_id(app, "show", "Show / Hide", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit TypeIT", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            if let Some(icon) = app.default_window_icon().cloned() {
+                TrayIconBuilder::with_id("main-tray")
+                    .icon(icon)
+                    .tooltip("TypeIT")
+                    .menu(&tray_menu)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "quit" => {
+                            log::info!("quit from tray");
+                            app.exit(0);
+                        }
+                        "show" => {
+                            if let Some(win) = app.get_webview_window("main") {
+                                let visible = win.is_visible().unwrap_or(false);
+                                if visible {
+                                    let _ = win.hide();
+                                } else {
+                                    let _ = win.show();
+                                    let _ = win.set_focus();
+                                }
+                            }
+                        }
+                        _ => {}
+                    })
+                    .build(app)?;
+                log::info!("tray icon created");
+            } else {
+                log::error!("no default window icon; tray not created");
             }
 
             // Make sure the window is actually shown, unminimized, and focused.

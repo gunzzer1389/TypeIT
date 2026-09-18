@@ -61,6 +61,22 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — Clean upgrades: tray Quit, single-instance, version bump
+
+- **Reported:** running the new installer still launched the *old* app.
+- **Cause:** window "close" only *hides* (no way to quit), so the old instance
+  kept running in the background and locked its files, blocking the installer
+  from replacing them.
+- **Fixes:** system **tray** icon (Show/Hide + **Quit TypeIT** → `app.exit(0)`)
+  so the app can actually be closed — needs `tauri` feature `tray-icon`;
+  **`tauri-plugin-single-instance`** (registered first) focuses the existing
+  window instead of opening a duplicate; **version 0.1.0 → 0.1.1** across
+  `tauri.conf.json` / `package.json` / `Cargo.toml` so installers treat it as an
+  upgrade. Documented Quit/Update steps in `BUILD.md`.
+- **User cleanup for the stuck state:** end `TypeIT.exe` in Task Manager,
+  uninstall old via Settings → Apps, then install the new build. Bump the
+  version on each future release.
+
 ## 2026-09-18 — Startup robustness + file logging (diagnostics)
 
 - **Reported:** first native run — "don't see it anywhere" (window absent),
