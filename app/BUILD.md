@@ -122,10 +122,11 @@ steadier. The range is remembered between runs.
   whole box **from the start** (use it to redo). After a Stop or focus loss,
   **Resume** / **Ctrl+Shift+R** continues from exactly where it left off — no
   repeats, no skips. The transcript is never overwritten.
-- **Auto-stop on focus change (Windows):** if you switch to a *different app*
-  while typing, it stops immediately (text never lands in the wrong app) and
-  reappears with a Resume prompt. Popups from the *same* app (autocomplete,
-  emoji picker) don't count, so they won't interrupt typing.
+- **Auto-stop on focus change (Windows & macOS):** if you switch to a *different
+  app* while typing, it stops immediately (text never lands in the wrong app).
+  Popups from the *same* app (autocomplete, emoji picker) don't count, so they
+  won't interrupt typing. (macOS keys off the frontmost app via AppKit; if it
+  ever can't confirm focus it safely falls back to hiding while it types.)
 - **Titlebar dots:** red = **Quit** the app (also **Ctrl+Shift+Q**), yellow =
   **hide to tray** (reopen with **Ctrl+Shift+Space**), green = toggle
   always-on-top.

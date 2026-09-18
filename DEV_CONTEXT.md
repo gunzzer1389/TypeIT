@@ -67,6 +67,23 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — macOS parity for focus features (AppKit)
+
+- Goal: make the three Windows-only behaviours work on macOS too, so both builds
+  match before testing. Added `[target.'cfg(target_os="macos")'.dependencies]`
+  `objc2` + `objc2-app-kit` (features NSWorkspace/NSRunningApplication/
+  NSApplication).
+- `foreground()` on macOS = `NSWorkspace::sharedWorkspace().frontmostApplication()
+  .processIdentifier()` (keyed by pid); `set_foreground(pid)` =
+  `NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
+  .activateWithOptions(IgnoringOtherApps)`. The last-app watcher and
+  `bring_target_forward` are now enabled for `any(windows, macos)`.
+- **Safety:** `bring_target_forward` still verifies focus left us and, if not
+  (e.g. AppKit activation from a bg thread doesn't take), falls back to hiding —
+  so macOS typing works regardless; focus-detection reads frontmost app.
+- Untested on a real Mac (no Mac here); CI compiles the macOS build. Own objc2
+  version is pinned independently of Tauri's (both can coexist).
+
 ## 2026-09-18 — Fix: Stop was restarting from the top
 
 - **Bug:** with stay-visible typing, clicking the Stop button activated our

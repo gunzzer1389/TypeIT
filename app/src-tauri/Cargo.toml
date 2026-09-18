@@ -4,7 +4,7 @@
 # keystrokes into whatever window you have focused. No screen-capture crates.
 [package]
 name = "typeit"
-version = "0.1.9"
+version = "0.2.0"
 description = "TypeIT visual shell (frameless translucent widget)"
 edition = "2021"
 rust-version = "1.77"
@@ -42,6 +42,12 @@ serde_json = "1"
 # leaves the target app.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
+# macOS-only: read the frontmost app and re-activate the target (AppKit), so
+# the same focus-aware stop + stay-visible typing works as on Windows.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.5"
+objc2-app-kit = { version = "0.2", features = ["NSWorkspace", "NSRunningApplication", "NSApplication"] }
 
 [profile.release]
 # Smaller, faster release binary — fits the "minimal footprint" goal.

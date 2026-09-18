@@ -234,9 +234,24 @@ fn foreground() -> (isize, u32) {
         (hwnd.0 as isize, pid)
     }
 }
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 fn foreground() -> (isize, u32) {
-    (0, 0) // focus-aware features are Windows-only for now
+    use objc2_app_kit::NSWorkspace;
+    unsafe {
+        let ws = NSWorkspace::sharedWorkspace();
+        match ws.frontmostApplication() {
+            // On macOS we key everything off the app's process id.
+            Some(app) => {
+                let pid = app.processIdentifier();
+                (pid as isize, pid as u32)
+            }
+            None => (0, 0),
+        }
+    }
+}
+#[cfg(not(any(windows, target_os = "macos")))]
+fn foreground() -> (isize, u32) {
+    (0, 0) // focus-aware features unavailable on this platform
 }
 
 /// Process id of the focused window. We compare by *process* (not window
@@ -256,8 +271,23 @@ fn set_foreground(hwnd: isize) -> bool {
     }
     unsafe { SetForegroundWindow(HWND(hwnd as *mut core::ffi::c_void)).as_bool() }
 }
-#[cfg(not(windows))]
-fn set_foreground(_hwnd: isize) -> bool {
+#[cfg(target_os = "macos")]
+fn set_foreground(pid: isize) -> bool {
+    use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+    if pid == 0 {
+        return false;
+    }
+    unsafe {
+        match NSRunningApplication::runningApplicationWithProcessIdentifier(pid as i32) {
+            Some(app) => app.activateWithOptions(
+                NSApplicationActivationOptions::NSApplicationActivateIgnoringOtherApps,
+            ),
+            None => false,
+        }
+    }
+}
+#[cfg(not(any(windows, target_os = "macos")))]
+fn set_foreground(_id: isize) -> bool {
     false
 }
 
@@ -651,9 +681,10 @@ pub fn run() {
         .setup(move |app| {
             log::info!("TypeIT setup: starting");
 
-            // Windows: continuously remember the last non-TypeIT foreground
-            // window, so typing can hand focus back to it and stay visible.
-            #[cfg(windows)]
+            // Windows/macOS: continuously remember the last non-TypeIT
+            // foreground app, so typing can hand focus back to it and stay
+            // visible (and detect when focus leaves the target).
+            #[cfg(any(windows, target_os = "macos"))]
             std::thread::spawn(|| {
                 let our_pid = std::process::id();
                 loop {
