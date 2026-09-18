@@ -1,7 +1,7 @@
 {
   "name": "typeit",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Visual shell for the TypeIT widget — a frameless, translucent, always-on-top desktop window (appearance/architecture study only).",
   "scripts": {
     "tauri": "tauri",

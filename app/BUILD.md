@@ -109,9 +109,15 @@ steadier. The range is remembered between runs.
 - **Windows:** `SendInput` works without special permission, but it can't type
   into an app running **as administrator** unless TypeIT is elevated too.
 - Show/hide TypeIT anytime with **Ctrl+Shift+Space**.
-- **Stop typing:** press **Ctrl+Shift+Backspace** (works even while the window
-  is hidden), or the on-screen **Stop** button. You can't re-trigger Type it
-  while a pass is running (that used to interleave and scramble the text).
+- **Stop typing:** while a job runs the **Type it** button turns into a red
+  **Stop** button (and **Ctrl+Shift+Backspace** works even when the window is
+  hidden). Stopping ends the whole job; the button then returns to Type it so
+  your next click redoes it from the start. You can't start a second job over a
+  running one.
+- **Human errors (mpl):** set **Mistakes / sentence** above the buttons. With
+  e.g. 5, TypeIT makes ~5 believable typos per sentence — types a wrong nearby
+  letter, pauses, backspaces, and corrects it (e.g. "definiy" → "definition") —
+  which also slows the pace a touch so it reads as human. 0 = perfect typing.
 - **Type it vs Resume:** **Type it** / **Ctrl+Shift+Enter** always types the
   whole box **from the start** (use it to redo). After a Stop or focus loss,
   **Resume** / **Ctrl+Shift+R** continues from exactly where it left off — no

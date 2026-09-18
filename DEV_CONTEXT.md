@@ -67,6 +67,24 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — Type/Stop toggle + human-like typos (mpl)
+
+- **Type it ↔ Stop toggle:** the primary button becomes a red **Stop** while a
+  job runs (frontend `isTyping`; `stop_typing` on click); removed the separate
+  Stop button. Ctrl+Shift+Backspace still stops (works when window hidden). Stop
+  ends the whole job; button returns to Type it → next click redoes from start.
+  Concurrency still blocked by the Rust `TYPING` guard. **Resume kept** (button +
+  Ctrl+Shift+R) per user choice.
+- **Human errors (mistakes per sentence):** new `mplInput` box + `set_mistakes`
+  command + `Mistakes(Mutex<u32>)` state (also read by resume/hotkey paths).
+  Backend `plan_mistakes` picks up to `mpl` words (≥4 letters) per sentence
+  (split on . ! ?); for each, `type_string_range` types a correct prefix, a
+  QWERTY-neighbour wrong char (`nearby_key`), a ~180–400 ms pause, backspaces via
+  `enigo.key(Key::Backspace)`, then the correct suffix — e.g. "definiy" →
+  "definition". Adds natural slowdown. `type_text` takes `mpl`; resume/hotkeys
+  read it from state. Progress/remaining still tracked by original-text index so
+  Resume stays exact.
+
 ## 2026-09-18 — UI cleanup + fix resume repeat/skip, redo-from-start
 
 - **Mojibake fix:** page had no charset, so the WebView decoded UTF-8 as Latin-1

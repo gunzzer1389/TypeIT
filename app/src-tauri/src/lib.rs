@@ -14,11 +14,12 @@
 // app regains focus) or a global hotkey (after you click into your target).
 // ---------------------------------------------------------------------------
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use enigo::{Enigo, Keyboard, Settings};
+use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use serde::Serialize;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -40,6 +41,90 @@ struct SpeedRange(Mutex<(u32, u32)>);
 /// The still-untyped remainder from the last interrupted pass (Stop or focus
 /// loss). Resume replays exactly this, so continuing never repeats or skips.
 struct Resume(Mutex<String>);
+
+/// Human-error rate: number of mistakes to make per sentence (0 = perfect).
+struct Mistakes(Mutex<u32>);
+
+/// A planned typo on a word: type `split` correct chars, then the `wrong`
+/// chars, backspace them, and type the rest correctly.
+struct Mistake {
+    word_len: usize,
+    split: usize,
+    wrong: Vec<char>,
+}
+
+/// A believable QWERTY-neighbour typo for `c` (keeps case). Falls back to `c`.
+fn nearby_key(c: char, rng: &mut Rng) -> char {
+    let neighbors: &str = match c.to_ascii_lowercase() {
+        'q' => "wa", 'w' => "qeas", 'e' => "wrsd", 'r' => "etdf", 't' => "rygf",
+        'y' => "tugh", 'u' => "yihj", 'i' => "uojk", 'o' => "ipkl", 'p' => "ol",
+        'a' => "qwsz", 's' => "awedxz", 'd' => "serfcx", 'f' => "drtgvc",
+        'g' => "ftyhbv", 'h' => "gyujnb", 'j' => "huikmn", 'k' => "jiolm",
+        'l' => "kop", 'z' => "asx", 'x' => "zsdc", 'c' => "xdfv", 'v' => "cfgb",
+        'b' => "vghn", 'n' => "bhjm", 'm' => "njk",
+        _ => return c,
+    };
+    let b = neighbors.as_bytes();
+    let pick = b[(rng.next_u64() as usize) % b.len()] as char;
+    if c.is_ascii_uppercase() { pick.to_ascii_uppercase() } else { pick }
+}
+
+/// Pick up to `mpl` of a sentence's words and record a typo plan for each.
+fn choose_mistakes(
+    words: &[(usize, usize)],
+    chars: &[char],
+    mpl: u32,
+    rng: &mut Rng,
+    plans: &mut HashMap<usize, Mistake>,
+) {
+    let n = words.len();
+    if n == 0 {
+        return;
+    }
+    let mut idx: Vec<usize> = (0..n).collect();
+    let k = (mpl as usize).min(n);
+    for j in 0..k {
+        // partial Fisher–Yates to pick distinct words
+        let r = j + (rng.next_u64() as usize) % (n - j);
+        idx.swap(j, r);
+        let (start, len) = words[idx[j]];
+        // correct-prefix length in [2, len-1]
+        let split = (2 + (rng.next_u64() as usize) % (len - 2)).min(len - 1).max(1);
+        let wrong = vec![nearby_key(chars[start + split], rng)];
+        plans.insert(start, Mistake { word_len: len, split, wrong });
+    }
+}
+
+/// Plan up to `mpl` typos per sentence (sentences split on . ! ?). Only words
+/// of 4+ letters are eligible. Keyed by the word's start index in `chars`.
+fn plan_mistakes(chars: &[char], mpl: u32, rng: &mut Rng) -> HashMap<usize, Mistake> {
+    let mut plans = HashMap::new();
+    if mpl == 0 {
+        return plans;
+    }
+    let mut words: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_alphabetic() {
+            let start = i;
+            while i < chars.len() && chars[i].is_alphabetic() {
+                i += 1;
+            }
+            let len = i - start;
+            if len >= 4 {
+                words.push((start, len));
+            }
+        } else {
+            if matches!(chars[i], '.' | '!' | '?') {
+                choose_mistakes(&words, chars, mpl, rng, &mut plans);
+                words.clear();
+            }
+            i += 1;
+        }
+    }
+    choose_mistakes(&words, chars, mpl, rng, &mut plans);
+    plans
+}
 
 /// Store the remainder after a pass: keep it if interrupted, clear if finished.
 fn remember_resume(app: &tauri::AppHandle, outcome: &TypeOutcome) {
@@ -160,7 +245,12 @@ fn foreground_pid() -> u32 {
 /// text length, typing was cancelled (Stop) — the caller can resume with the
 /// remaining slice. Character counting is by Unicode scalar (`chars`), matching
 /// the frontend's `Array.from(text)` so resume slicing lines up.
-fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<TypeOutcome, String> {
+fn type_string_range(
+    text: &str,
+    min_wpm: u32,
+    max_wpm: u32,
+    mpl: u32,
+) -> Result<TypeOutcome, String> {
     if text.trim().is_empty() {
         return Err("Nothing to type".into());
     }
@@ -188,26 +278,64 @@ fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<TypeOutco
         e.to_string()
     })?;
     let mut rng = Rng::seeded();
+    let plans = plan_mistakes(&chars, mpl, &mut rng);
     let mut buf = [0u8; 4];
-    let mut typed = 0usize;
-    for ch in &chars {
-        if CANCEL.load(Ordering::SeqCst) {
-            log::info!("typing stopped after {typed} chars");
-            return Ok(outcome(typed, "stopped"));
-        }
-        if target_pid != 0 && foreground_pid() != target_pid {
-            log::info!("focus left target app; paused after {typed} chars");
-            return Ok(outcome(typed, "focus_lost"));
-        }
-        enigo.text(ch.encode_utf8(&mut buf)).map_err(|e| {
-            log::error!("enigo type failed: {e}");
-            e.to_string()
-        })?;
-        typed += 1;
-        std::thread::sleep(per_char_delay(rng.in_range(lo, hi)));
+
+    // Type one char, respecting the wpm band.
+    macro_rules! put {
+        ($ch:expr) => {{
+            let s = ($ch).encode_utf8(&mut buf);
+            enigo.text(s).map_err(|e| {
+                log::error!("enigo type failed: {e}");
+                e.to_string()
+            })?;
+            std::thread::sleep(per_char_delay(rng.in_range(lo, hi)));
+        }};
     }
-    log::info!("typed {typed} chars at {lo}-{hi} wpm");
-    Ok(outcome(typed, "done"))
+
+    let mut i = 0usize;
+    while i < chars.len() {
+        if CANCEL.load(Ordering::SeqCst) {
+            log::info!("typing stopped after {i} chars");
+            return Ok(outcome(i, "stopped"));
+        }
+        // Only check focus at unit boundaries (not mid-word) so a typo+fix stays
+        // atomic; words are short, so cancellation is still responsive.
+        if target_pid != 0 && foreground_pid() != target_pid {
+            log::info!("focus left target app; paused after {i} chars");
+            return Ok(outcome(i, "focus_lost"));
+        }
+
+        if let Some(plan) = plans.get(&i) {
+            let word: Vec<char> = chars[i..i + plan.word_len].to_vec();
+            // correct prefix
+            for &c in &word[..plan.split] {
+                put!(c);
+            }
+            // the mistake: wrong chars
+            for &c in &plan.wrong {
+                put!(c);
+            }
+            // a beat to "notice" it, then backspace and correct — this is what
+            // slows the word down a touch and reads as human.
+            std::thread::sleep(Duration::from_millis(180 + (rng.next_u64() % 220)));
+            for _ in 0..plan.wrong.len() {
+                enigo
+                    .key(Key::Backspace, Direction::Click)
+                    .map_err(|e| e.to_string())?;
+                std::thread::sleep(per_char_delay(rng.in_range(lo, hi)));
+            }
+            for &c in &word[plan.split..] {
+                put!(c);
+            }
+            i += plan.word_len;
+        } else {
+            put!(chars[i]);
+            i += 1;
+        }
+    }
+    log::info!("typed {i} chars ({} typos) at {lo}-{hi} wpm", plans.len());
+    Ok(outcome(i, "done"))
 }
 
 /// Flip always-on-top from the UI. `window` is always this app's own window.
@@ -242,6 +370,14 @@ fn set_speed_range(min_wpm: u32, max_wpm: u32, state: tauri::State<SpeedRange>) 
     }
 }
 
+/// Frontend keeps this in sync with the mistakes-per-sentence control.
+#[tauri::command]
+fn set_mistakes(mpl: u32, state: tauri::State<Mistakes>) {
+    if let Ok(mut guard) = state.0.lock() {
+        *guard = mpl.min(20);
+    }
+}
+
 /// Button path: hide our own window so the app you had focused regains focus,
 /// give the OS a beat to move focus back, then type at `wpm`. Runs on a
 /// blocking thread so neither the sleep nor the typing freezes the UI.
@@ -252,13 +388,14 @@ async fn type_text(
     text: String,
     min_wpm: u32,
     max_wpm: u32,
+    mpl: u32,
 ) -> Result<TypeOutcome, String> {
     let _ = window.hide();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
         // Give focus a beat to return to the previous app before we start, so
         // the first characters don't get dropped.
         std::thread::sleep(Duration::from_millis(400));
-        type_string_range(&text, min_wpm, max_wpm)
+        type_string_range(&text, min_wpm, max_wpm, mpl)
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -287,10 +424,14 @@ async fn resume_typing(
     if text.trim().is_empty() {
         return Err("Nothing to resume".into());
     }
+    let mpl = app
+        .try_state::<Mistakes>()
+        .and_then(|s| s.0.lock().ok().map(|g| *g))
+        .unwrap_or(0);
     let _ = window.hide();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
         std::thread::sleep(Duration::from_millis(400));
-        type_string_range(&text, min_wpm, max_wpm)
+        type_string_range(&text, min_wpm, max_wpm, mpl)
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -387,8 +528,12 @@ pub fn run() {
                                 .try_state::<SpeedRange>()
                                 .and_then(|s| s.0.lock().ok().map(|g| *g))
                                 .unwrap_or((DEFAULT_MIN, DEFAULT_MAX));
+                            let mpl = app
+                                .try_state::<Mistakes>()
+                                .and_then(|s| s.0.lock().ok().map(|g| *g))
+                                .unwrap_or(0);
                             let app_handle = app.clone();
-                            std::thread::spawn(move || match type_string_range(&text, lo, hi) {
+                            std::thread::spawn(move || match type_string_range(&text, lo, hi, mpl) {
                                 Ok(outcome) => {
                                     remember_resume(&app_handle, &outcome);
                                     if outcome.reason == "focus_lost" {
@@ -414,8 +559,12 @@ pub fn run() {
                             .try_state::<SpeedRange>()
                             .and_then(|s| s.0.lock().ok().map(|g| *g))
                             .unwrap_or((DEFAULT_MIN, DEFAULT_MAX));
+                        let mpl = app
+                            .try_state::<Mistakes>()
+                            .and_then(|s| s.0.lock().ok().map(|g| *g))
+                            .unwrap_or(0);
                         let app_handle = app.clone();
-                        std::thread::spawn(move || match type_string_range(&text, lo, hi) {
+                        std::thread::spawn(move || match type_string_range(&text, lo, hi, mpl) {
                             Ok(outcome) => {
                                 remember_resume(&app_handle, &outcome);
                                 if outcome.reason == "focus_lost" {
@@ -435,6 +584,7 @@ pub fn run() {
         .manage(PendingText(Mutex::new(String::new())))
         .manage(SpeedRange(Mutex::new((DEFAULT_MIN, DEFAULT_MAX))))
         .manage(Resume(Mutex::new(String::new())))
+        .manage(Mistakes(Mutex::new(0)))
         .setup(move |app| {
             log::info!("TypeIT setup: starting");
 
@@ -523,6 +673,7 @@ pub fn run() {
             open_url,
             set_pending_text,
             set_speed_range,
+            set_mistakes,
             type_text,
             resume_typing,
             stop_typing

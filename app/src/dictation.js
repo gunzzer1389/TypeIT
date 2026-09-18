@@ -364,6 +364,26 @@
     wpmMax.addEventListener("change", function () { applyRange({ announce: true }); });
   }
 
+  // --- Human errors (mistakes per sentence) ----------------------------
+  var MPL_STORE = "typeit.mpl";
+  var mplInput = document.getElementById("mplInput");
+  function currentMpl() {
+    var n = Math.round(Number(mplInput ? mplInput.value : 0));
+    if (!isFinite(n) || n < 0) n = 0;
+    return Math.min(20, n);
+  }
+  function applyMpl() {
+    var v = currentMpl();
+    if (mplInput) mplInput.value = v;
+    try { localStorage.setItem(MPL_STORE, String(v)); } catch (_) {}
+    if (invoke) invoke("set_mistakes", { mpl: v }).catch(function () {});
+  }
+  if (mplInput) {
+    try { var sm = localStorage.getItem(MPL_STORE); if (sm != null) mplInput.value = sm; } catch (_) {}
+    applyMpl();
+    mplInput.addEventListener("change", applyMpl);
+  }
+
   // Keep the Rust side's copy of the transcript current (debounced), so the
   // global hotkey has something to type when the webview isn't focused.
   if (invoke) {
@@ -376,24 +396,26 @@
     });
   }
 
-  var stopBtn = document.getElementById("stopBtn");
   var resumeBtn = document.getElementById("resumeBtn");
+  var typeLabel = typeBtn ? typeBtn.querySelector("span") : null;
+  var isTyping = false;
 
-  // While typing: disable Type it (prevents the double-trigger that scrambles
-  // output), hide Resume, and reveal Stop.
+  // The Type it button becomes a Stop button while a job runs; you can't start
+  // a second job over a running one. Clicking Stop ends the whole job, then the
+  // button returns to Type it (so the next click redoes from the start).
   function setTypingUI(on) {
-    if (typeBtn) typeBtn.disabled = on;
-    if (stopBtn) stopBtn.hidden = !on;
+    isTyping = on;
+    if (typeBtn) {
+      typeBtn.classList.toggle("is-stop", on);
+      typeBtn.title = on
+        ? "Stop typing (Ctrl+Shift+Backspace)"
+        : "Type the text into the app you had focused (Ctrl+Shift+Enter)";
+    }
+    if (typeLabel) typeLabel.textContent = on ? "Stop" : "Type it";
     if (on && resumeBtn) resumeBtn.hidden = true;
   }
   function showResume(show) {
     if (resumeBtn) resumeBtn.hidden = !show;
-  }
-
-  if (stopBtn) {
-    stopBtn.addEventListener("click", function () {
-      if (invoke) invoke("stop_typing").catch(function () {});
-    });
   }
 
   // Apply the result of a typing pass. The transcript is NEVER overwritten, so
@@ -423,7 +445,11 @@
 
   if (typeBtn) {
     typeBtn.addEventListener("click", async function () {
-      if (typeBtn.disabled) return;
+      // While typing, the button is Stop — end the whole job.
+      if (isTyping) {
+        if (invoke) invoke("stop_typing").catch(function () {});
+        return;
+      }
       var text = transcriptEl.value.trim();
       if (!text) { setStatus("Nothing to type", "error"); return; }
       if (!invoke) { setStatus("Type-it needs the desktop app", "error"); return; }
@@ -434,7 +460,9 @@
       try {
         await invoke("set_pending_text", { text: text });
         // type_text always types the full text from the start.
-        var outcome = await invoke("type_text", { text: text, minWpm: r[0], maxWpm: r[1] });
+        var outcome = await invoke("type_text", {
+          text: text, minWpm: r[0], maxWpm: r[1], mpl: currentMpl()
+        });
         handleOutcome(outcome);
       } catch (err) {
         setTypingUI(false);
@@ -447,7 +475,7 @@
 
   if (resumeBtn) {
     resumeBtn.addEventListener("click", async function () {
-      if (!invoke) return;
+      if (!invoke || isTyping) return;
       var r = currentRange();
       setTypingUI(true);
       setStatus("Resuming…");

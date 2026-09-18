@@ -336,6 +336,12 @@
   .resume-btn { color: var(--good); border-color: rgba(62,207,142,0.4); }
   .resume-btn:hover { color: #6ee7b0; }
   .send:disabled { opacity: 0.5; cursor: default; }
+  /* Type it turns into a red Stop button while a job runs. */
+  .send.is-stop {
+    color: #180e0e;
+    background: linear-gradient(180deg, #ff9a9a, #ff6b6b);
+    box-shadow: 0 6px 18px -8px rgba(255,107,107,0.8);
+  }
 
   /* About / shortcuts block inside Settings */
   .about h2 { margin: 0 0 6px; font-size: 15px; color: var(--ink); }
@@ -705,6 +711,15 @@
         <span class="wpm-unit">wpm</span>
       </div>
 
+      <div class="speed-row">
+        <label for="mplInput">Human errors</label>
+        <input id="mplInput" class="wpm-input" type="number" min="0" max="20" step="1"
+               value="0" inputmode="numeric"
+               aria-label="Mistakes per sentence"
+               title="Typos per sentence: TypeIT types a wrong letter, backspaces, and corrects it (mpl). 0 = perfect." />
+        <span class="wpm-unit">/ sentence</span>
+      </div>
+
       <div class="composer-bar">
         <button id="micBtn" class="mic" type="button" aria-pressed="false" title="Start / stop dictation">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
@@ -714,8 +729,6 @@
         <button id="clearBtn" class="ghost-btn" type="button" title="Clear the transcript">Clear</button>
         <button id="resumeBtn" class="ghost-btn resume-btn" type="button" hidden
           title="Resume where typing stopped (Ctrl+Shift+R)">Resume</button>
-        <button id="stopBtn" class="ghost-btn stop-btn" type="button" hidden
-          title="Stop typing (Ctrl+Shift+Backspace)">Stop</button>
         <button id="typeBtn" class="send" type="button"
           title="Type the text into the app you had focused. Or click into your target and press Ctrl+Shift+Enter.">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 14-7-7 14-2-5-5-2Z"/></svg>
