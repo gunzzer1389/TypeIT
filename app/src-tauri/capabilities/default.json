@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions for the Ghost Typer shell window. Scoped to the app's own 'main' window and the global-shortcut plugin only.",
+  "description": "Permissions for the TypeIT shell window. Scoped to the app's own 'main' window and the global-shortcut plugin only.",
   "windows": ["main"],
   "permissions": [
     "core:default",

@@ -1,4 +1,4 @@
-# Building & running the Ghost Typer shell
+# Building & running the TypeIT shell
 
 This is the **visual shell** only: a frameless, translucent, always-on-top
 window that renders the UI (`src/index.html`) with a working see-through
@@ -35,8 +35,8 @@ Verify: `rustc --version`, `cargo --version`, `node --version`.
 ## 2. Get the project onto that machine
 
 ```bash
-git clone https://github.com/gunzzer1389/Ghost_Typer.git
-cd Ghost_Typer/app
+git clone https://github.com/gunzzer1389/TypeIT.git
+cd TypeIT/app
 git checkout dev
 ```
 

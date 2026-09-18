@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Ghost Typer — visual shell (Rust core)
+// TypeIT — visual shell (Rust core)
 //
 // Scope note: this backend only creates a frameless/transparent/always-on-top
 // window and registers ONE global shortcut that shows/hides *this app's own*
@@ -60,5 +60,5 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![set_always_on_top])
         .run(tauri::generate_context!())
-        .expect("error while running Ghost Typer Shell");
+        .expect("error while running TypeIT");
 }

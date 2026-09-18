@@ -1,8 +1,8 @@
 {
-  "name": "ghost-typer-shell",
+  "name": "typeit",
   "private": true,
   "version": "0.1.0",
-  "description": "Visual shell for the Ghost Typer widget — a frameless, translucent, always-on-top desktop window (appearance/architecture study only).",
+  "description": "Visual shell for the TypeIT widget — a frameless, translucent, always-on-top desktop window (appearance/architecture study only).",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",

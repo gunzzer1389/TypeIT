@@ -1,2 +1,2 @@
-# Ghost_Typer
+# TypeIT
 

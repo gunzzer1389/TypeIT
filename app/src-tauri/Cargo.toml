@@ -1,10 +1,10 @@
-# Cargo manifest for the Ghost Typer visual shell.
+# Cargo manifest for the TypeIT visual shell.
 # Kept intentionally small: a Tauri v2 desktop window plus the global-shortcut
 # plugin for a show/hide accelerator. No input-simulation / capture crates.
 [package]
-name = "ghost-typer-shell"
+name = "typeit"
 version = "0.1.0"
-description = "Ghost Typer visual shell (frameless translucent widget)"
+description = "TypeIT visual shell (frameless translucent widget)"
 edition = "2021"
 rust-version = "1.77"
 
@@ -12,7 +12,7 @@ rust-version = "1.77"
 # Tauri v2 splits the app into a lib (the real logic) and a thin main.rs.
 # The staticlib/cdylib crate types are what the mobile targets expect; rlib
 # keeps desktop builds simple. name must be a valid Rust identifier.
-name = "ghost_typer_shell_lib"
+name = "typeit_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

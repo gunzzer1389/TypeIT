@@ -1,4 +1,4 @@
-# Builds the Ghost Typer shell natively on real Windows and macOS runners,
+# Builds the TypeIT shell natively on real Windows and macOS runners,
 # then uploads the installers as downloadable artifacts. This is how we get a
 # Windows .exe/.msi and a macOS .app/.dmg without a local cross-compile.
 name: Build desktop shell
@@ -51,7 +51,7 @@ jobs:
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
-          name: ghost-typer-${{ matrix.name }}
+          name: typeit-${{ matrix.name }}
           path: |
             app/src-tauri/target/release/bundle/**/*
             app/src-tauri/target/release/*.exe

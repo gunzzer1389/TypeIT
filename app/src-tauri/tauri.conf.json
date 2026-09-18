@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Ghost Typer Shell",
+  "productName": "TypeIT",
   "version": "0.1.0",
-  "identifier": "com.ghosttyper.shell",
+  "identifier": "com.typeit.app",
   "build": {
     "frontendDist": "../src"
   },
@@ -12,7 +12,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Ghost Typer Shell",
+        "title": "TypeIT",
         "width": 720,
         "height": 660,
         "minWidth": 380,
