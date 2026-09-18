@@ -19,9 +19,10 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use enigo::{Enigo, Keyboard, Settings};
+use serde::Serialize;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_log::{Target, TargetKind};
 use tauri_plugin_opener::OpenerExt;
@@ -101,6 +102,29 @@ impl Drop for TypingGuard {
     }
 }
 
+/// Result of a typing pass, sent to the frontend.
+///   reason: "done" (finished), "stopped" (Stop), or "focus_lost" (you clicked
+///   into another window). `remaining` is the still-untyped text, so the UI can
+///   put it back in the box and resume from there.
+#[derive(Clone, Serialize)]
+struct TypeOutcome {
+    typed: usize,
+    reason: String,
+    remaining: String,
+}
+
+/// Handle (as an integer) of the window that currently has focus. Used to
+/// detect the user switching away from the target mid-type. 0 = unknown.
+#[cfg(windows)]
+fn foreground_window() -> isize {
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    unsafe { GetForegroundWindow().0 as isize }
+}
+#[cfg(not(windows))]
+fn foreground_window() -> isize {
+    0 // focus-aware stop is Windows-only for now
+}
+
 /// Synthesize `text` into the focused window one character at a time. Each
 /// character's pause corresponds to a wpm picked uniformly in [min, max], so
 /// the overall pace varies naturally and averages near the band's midpoint.
@@ -108,7 +132,7 @@ impl Drop for TypingGuard {
 /// text length, typing was cancelled (Stop) — the caller can resume with the
 /// remaining slice. Character counting is by Unicode scalar (`chars`), matching
 /// the frontend's `Array.from(text)` so resume slicing lines up.
-fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<usize, String> {
+fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<TypeOutcome, String> {
     if text.trim().is_empty() {
         return Err("Nothing to type".into());
     }
@@ -120,7 +144,16 @@ fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<usize, St
     let _guard = TypingGuard; // releases TYPING when this function returns
     CANCEL.store(false, Ordering::SeqCst); // fresh run
 
+    let chars: Vec<char> = text.chars().collect();
+    let outcome = |typed: usize, reason: &str| TypeOutcome {
+        typed,
+        reason: reason.to_string(),
+        remaining: chars[typed.min(chars.len())..].iter().collect(),
+    };
+
     let (lo, hi) = normalize_range(min_wpm, max_wpm);
+    // The window the user is typing into. If focus moves away from it, stop.
+    let target = foreground_window();
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
         log::error!("enigo init failed: {e}");
         e.to_string()
@@ -128,10 +161,14 @@ fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<usize, St
     let mut rng = Rng::seeded();
     let mut buf = [0u8; 4];
     let mut typed = 0usize;
-    for ch in text.chars() {
+    for ch in &chars {
         if CANCEL.load(Ordering::SeqCst) {
             log::info!("typing stopped after {typed} chars");
-            return Ok(typed);
+            return Ok(outcome(typed, "stopped"));
+        }
+        if target != 0 && foreground_window() != target {
+            log::info!("focus left target; paused after {typed} chars");
+            return Ok(outcome(typed, "focus_lost"));
         }
         enigo.text(ch.encode_utf8(&mut buf)).map_err(|e| {
             log::error!("enigo type failed: {e}");
@@ -141,7 +178,7 @@ fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<usize, St
         std::thread::sleep(per_char_delay(rng.in_range(lo, hi)));
     }
     log::info!("typed {typed} chars at {lo}-{hi} wpm");
-    Ok(typed)
+    Ok(outcome(typed, "done"))
 }
 
 /// Flip always-on-top from the UI. `window` is always this app's own window.
@@ -185,14 +222,21 @@ async fn type_text(
     text: String,
     min_wpm: u32,
     max_wpm: u32,
-) -> Result<usize, String> {
+) -> Result<TypeOutcome, String> {
     let _ = window.hide();
-    tauri::async_runtime::spawn_blocking(move || {
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
         std::thread::sleep(Duration::from_millis(250));
         type_string_range(&text, min_wpm, max_wpm)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())??;
+    // If focus wandered off, bring TypeIT back so the user sees the pause and
+    // the remaining text (with a hint to click into their app and resume).
+    if outcome.reason == "focus_lost" {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    Ok(outcome)
 }
 
 /// Request the in-flight typing to stop (Stop button; also the Stop hotkey).
@@ -278,8 +322,18 @@ pub fn run() {
                             .try_state::<SpeedRange>()
                             .and_then(|s| s.0.lock().ok().map(|g| *g))
                             .unwrap_or((DEFAULT_MIN, DEFAULT_MAX));
-                        std::thread::spawn(move || {
-                            let _ = type_string_range(&text, lo, hi);
+                        let app_handle = app.clone();
+                        std::thread::spawn(move || match type_string_range(&text, lo, hi) {
+                            Ok(outcome) => {
+                                if outcome.reason == "focus_lost" {
+                                    if let Some(win) = app_handle.get_webview_window("main") {
+                                        let _ = win.show();
+                                        let _ = win.set_focus();
+                                    }
+                                }
+                                let _ = app_handle.emit("type-outcome", outcome);
+                            }
+                            Err(e) => log::warn!("hotkey type: {e}"),
                         });
                     }
                 })

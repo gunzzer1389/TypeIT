@@ -114,6 +114,10 @@ steadier. The range is remembered between runs.
   can't re-trigger Type it while a pass is running (that used to interleave and
   scramble the text). After a Stop, the **untyped remainder stays in the box**,
   so editing it and pressing Type it again resumes from where it left off.
+- **Auto-stop on focus change (Windows):** if you click into a different window
+  while TypeIT is typing, it stops immediately (text never lands in the wrong
+  app), reappears with the remaining text, and prompts you to click back into
+  your app and press **Ctrl+Shift+Enter** to resume.
 - **Quitting:** closing the window only *hides* it (reopen with the hotkey). To
   fully quit, use the **system tray** icon → **Quit TypeIT**. Fully quitting
   matters before installing an update, since a running copy locks its files.

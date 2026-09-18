@@ -59,11 +59,29 @@ ordinary desktop tool.
       concealment — still a normal, visible process.
 - [ ] User builds the shell on Windows and/or macOS (`app/BUILD.md`) and reports
       how the transparent widget looks/behaves natively.
+- [x] **Auto-stop on focus loss (Windows)** — typing stops when focus leaves the
+      target window; window reappears with the remainder; resume via hotkey.
 - [ ] Iterate visual polish based on native rendering (blur, radius, sizing).
 - [ ] Optional shell niceties: remember window position, tray entry,
       configurable opacity hotkey.
 
 ---
+
+## 2026-09-18 — Auto-stop when focus leaves the target (Windows)
+
+- **Windows foreground detection:** `windows` crate (`Win32_UI_WindowsAndMessaging`)
+  → `foreground_window()` (isize HWND; no-op 0 on non-Windows). Captured at the
+  start of `type_string_range`; each char, if the foreground HWND changed, stop
+  with reason `focus_lost` so text never lands in the wrong app.
+- **Outcome plumbing:** `type_string_range` now returns `TypeOutcome { typed,
+  reason: done|stopped|focus_lost, remaining }`. `type_text` returns it (button
+  path) and, on `focus_lost`, re-shows the window. Hotkey path emits it as a
+  `type-outcome` event (`Emitter`). Frontend `handleOutcome()` puts `remaining`
+  back in the box, syncs pending text, and on `focus_lost` shows the resume hint;
+  listens for the event via `core:event:default` (added to capabilities).
+- **Resume UX:** no focus-stealing dialog — on focus loss TypeIT reappears with
+  the remainder; user clicks back into the app and presses Ctrl+Shift+Enter.
+- macOS: focus-aware stop is a no-op for now (helper returns 0).
 
 ## 2026-09-18 — Stop / no-double-type / resume from where it left off
 

@@ -408,6 +408,30 @@
     });
   }
 
+  // Apply the result of a typing pass (from the button's return value or, for
+  // the hotkey path, the "type-outcome" event).
+  function handleOutcome(o) {
+    setTypingUI(false);
+    if (!o || o.reason === "done") { setStatus("Typed", "live"); return; }
+    // stopped or focus_lost: the untyped remainder is ready to resume.
+    if (typeof o.remaining === "string") {
+      transcriptEl.value = o.remaining;
+      if (invoke) invoke("set_pending_text", { text: o.remaining }).catch(function () {});
+    }
+    if (o.reason === "focus_lost") {
+      setStatus("Paused — you switched windows. Click your app, then Ctrl+Shift+Enter to resume.", "error");
+    } else {
+      var left = o.remaining ? Array.from(o.remaining).length : 0;
+      setStatus("Stopped · " + left + " left", "error");
+    }
+  }
+
+  // Hotkey-path typing reports back through an event; the button path uses the
+  // command's return value below.
+  if (tauri && tauri.event && tauri.event.listen) {
+    tauri.event.listen("type-outcome", function (e) { handleOutcome(e.payload); });
+  }
+
   if (typeBtn) {
     typeBtn.addEventListener("click", async function () {
       if (typeBtn.disabled) return;
@@ -420,25 +444,13 @@
       setStatus("Typing…");
       try {
         await invoke("set_pending_text", { text: text });
-        var typed = await invoke("type_text", { text: text, minWpm: r[0], maxWpm: r[1] });
-        // Rust returns how many characters it actually typed. If fewer than the
-        // whole text, it was stopped — leave the remaining text in the box so
-        // the next Type it resumes from where it left off.
-        var cps = Array.from(text);
-        if (typeof typed === "number" && typed < cps.length) {
-          var remaining = cps.slice(typed).join("");
-          transcriptEl.value = remaining;
-          invoke("set_pending_text", { text: remaining }).catch(function () {});
-          setStatus("Stopped · " + (cps.length - typed) + " left", "error");
-        } else {
-          setStatus("Typed", "live");
-        }
+        var outcome = await invoke("type_text", { text: text, minWpm: r[0], maxWpm: r[1] });
+        handleOutcome(outcome);
       } catch (err) {
+        setTypingUI(false);
         var msg = String(err);
         setStatus(msg.indexOf("Already") >= 0 ? "Already typing" : "Type failed", "error");
         console.error("type_text failed:", err);
-      } finally {
-        setTypingUI(false);
       }
     });
   }
