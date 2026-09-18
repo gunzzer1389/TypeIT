@@ -1,9 +1,11 @@
-# Building & running the TypeIT shell
+# Building & running TypeIT
 
-This is the **visual shell** only: a frameless, translucent, always-on-top
-window that renders the UI (`src/index.html`) with a working see-through
-control and a global **Ctrl+Shift+Space** show/hide hotkey. It does **not**
-type into other apps, target other windows, or hide from screen capture.
+A frameless, translucent, always-on-top **dictation helper**: speak, and your
+words are transcribed (via Deepgram) into an editable box in the widget; review
+them, then copy/send them where you need. It renders `src/index.html`, has a
+working see-through control, and a global **Ctrl+Shift+Space** show/hide hotkey.
+It records the mic only while dictation is on, and does **not** capture the
+screen or hide itself from your system.
 
 > **WSL / Linux note:** Tauri does not cross-compile GUI apps. A Windows `.exe`
 > must be built **on Windows**, and a macOS `.app` **on a Mac**. You can't
@@ -65,6 +67,22 @@ frameless translucent widget appears, centered and on top. Try:
 - **Slider / presets** — change the glass opacity live.
 - **Traffic lights** — red hides, yellow minimizes, green toggles always-on-top.
 - **Drag** the empty part of the title bar to move the window.
+
+## 4b. Dictation setup (Deepgram + microphone)
+
+- **API key:** get one at https://console.deepgram.com. On first run, paste it
+  into the key bar at the top of the widget and hit **Save key**. It's stored in
+  the webview's `localStorage` on this machine and sent only to Deepgram. (A more
+  secure store — OS keychain via a Tauri command — is a planned follow-up.)
+- **Microphone permission (macOS):** the app ships an
+  `NSMicrophoneUsageDescription` (`src-tauri/Info.plist`), so macOS will prompt
+  the first time you press Dictate. Approve it in the prompt (or later under
+  System Settings → Privacy & Security → Microphone).
+- **Microphone permission (Windows):** WebView2 requests mic access on first use;
+  allow it. Ensure the mic isn't blocked under Settings → Privacy → Microphone.
+- **No transcript?** Open the devtools console (right-click → Inspect in dev
+  mode) — auth failures surface as a `Key rejected` status, mic issues as
+  `Mic blocked`.
 
 ## 5. Build a distributable
 

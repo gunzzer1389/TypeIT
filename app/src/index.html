@@ -1,16 +1,16 @@
 <title>TypeIT</title>
-<meta name="description" content="A non-functional visual design study of a translucent floating-widget UI." />
+<meta name="description" content="TypeIT — a translucent, always-on-top dictation helper: speak, review, and send text where you need it." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
 <style>
   /* ------------------------------------------------------------------ *
-   * TypeIT — visual design study (appearance only)
+   * TypeIT — dictation helper UI (translucent glass, single dark theme)
    * A committed single "dark glass" world: the whole point is a
    * translucent widget floating over a desktop, so the ground is
    * painted explicitly and the design stays single-theme by choice.
-   * Every color is a token; nothing here types, captures, or touches
-   * another application — it is a static look-and-feel mockup.
+   * Every color is a token. The dictation behaviour lives in dictation.js;
+   * this block is styling only.
    * ------------------------------------------------------------------ */
   :root {
     /* --- Scene (mock desktop behind the glass) --- */
@@ -238,6 +238,84 @@
     .compose .caret-line::after { animation: none; }
   }
   .ghosted { color: var(--ink-faint); }
+
+  /* -------------------- Dictation surface -------------------- */
+  /* The transcript is a real editable field: Deepgram results stream in
+     here as you speak, and you can fix wording before sending. The
+     interim line shows the not-yet-final words in the accent colour. */
+  .transcript {
+    flex: 1;
+    width: 100%;
+    resize: none;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.7;
+    outline: none;
+    min-height: 96px;
+  }
+  .transcript::placeholder { color: var(--ink-faint); }
+  .interim {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--accent);
+    opacity: 0.85;
+    min-height: 1.2em;
+    margin-top: 6px;
+  }
+
+  /* Deepgram API-key bar — shown only until a key is saved locally. */
+  .key-bar { display: flex; gap: 8px; }
+  .key-input {
+    flex: 1;
+    padding: 9px 13px;
+    border-radius: var(--radius-pill);
+    background: rgba(0,0,0,0.24);
+    border: 1px solid var(--glass-line);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    outline: none;
+  }
+  .key-input:focus { border-color: var(--accent); }
+  .key-save {
+    padding: 9px 16px; border: 0; cursor: pointer;
+    border-radius: var(--radius-pill);
+    font-family: var(--mono); font-size: 13px; font-weight: 600; color: #0e1020;
+    background: linear-gradient(180deg, #9a9cff, var(--accent));
+  }
+
+  /* Mic toggle — turns red while listening. */
+  .mic {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    color: var(--ink);
+    padding: 9px 15px; border-radius: var(--radius-pill);
+    border: 1px solid var(--glass-line);
+    background: rgba(0,0,0,0.24);
+    cursor: pointer;
+  }
+  .mic[aria-pressed="true"] {
+    color: #180e0e;
+    background: linear-gradient(180deg, #ff9a9a, #ff6b6b);
+    border-color: transparent;
+  }
+  .mic:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .dict-status {
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint);
+    margin-right: auto;
+  }
+  .dict-status.error { color: #ff8a8a; }
+  .dict-status.live  { color: var(--good); }
+  .ghost-btn {
+    font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim);
+    background: transparent; border: 1px solid var(--glass-line);
+    border-radius: var(--radius-pill); padding: 8px 13px; cursor: pointer;
+  }
+  .ghost-btn:hover { color: var(--ink); }
 
   .composer-bar {
     display: flex;
@@ -518,7 +596,7 @@
 <div class="stage">
 
   <!-- ============ Floating widget ============ -->
-  <section class="gt-window" aria-label="TypeIT widget (visual mockup)">
+  <section class="gt-window" aria-label="TypeIT dictation widget">
     <!-- data-tauri-drag-region makes the empty titlebar draggable (the
          window is frameless); the buttons inside stay clickable. -->
     <div class="titlebar" data-tauri-drag-region>
@@ -543,18 +621,29 @@
     </div>
 
     <div class="win-body">
-      <div class="compose">
-        <div class="caret-line">The quick brown fox jumps over the lazy dog</div>
-        <div class="caret-line ghosted">A translucent floating shell — appearance study only.</div>
+      <!-- Deepgram API key — appears only until a key is saved (localStorage). -->
+      <div id="keyBar" class="key-bar" hidden>
+        <input id="keyInput" class="key-input" type="password" autocomplete="off"
+               spellcheck="false" placeholder="Paste your Deepgram API key to enable dictation…" />
+        <button id="keySave" class="key-save" type="button">Save key</button>
       </div>
+
+      <div class="compose">
+        <textarea id="transcript" class="transcript" spellcheck="true"
+          placeholder="Press Dictate and start talking — your words land here. Edit anything before you send it."></textarea>
+        <div id="interim" class="interim" aria-live="polite"></div>
+      </div>
+
       <div class="composer-bar">
-        <div class="field">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-          Type or paste text here…
-        </div>
-        <button class="send" type="button">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 14-7-7 14-2-5-5-2Z"/></svg>
-          <span>Ready</span>
+        <button id="micBtn" class="mic" type="button" aria-pressed="false" title="Start / stop dictation">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          <span id="micLabel">Dictate</span>
+        </button>
+        <span id="dictStatus" class="dict-status" role="status">Idle</span>
+        <button id="clearBtn" class="ghost-btn" type="button" title="Clear the transcript">Clear</button>
+        <button id="copyBtn" class="send" type="button" title="Copy transcript to clipboard">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          <span>Copy</span>
         </button>
       </div>
     </div>
@@ -563,7 +652,7 @@
   <!-- ============ See-through settings (from reference) ============ -->
   <!-- Now a popover: dropped from the gear icon in the titlebar and
        toggled show/hide by it. Purely in-window UI state. -->
-  <section id="seethrough" class="seethrough popover" role="dialog" aria-label="Window see-through settings (visual mockup)" aria-hidden="false">
+  <section id="seethrough" class="seethrough popover" role="dialog" aria-label="Window see-through settings" aria-hidden="false">
     <div class="st-head">
       <div class="st-badge" aria-hidden="true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -620,9 +709,11 @@
 </div>
 
 <p class="disclaimer">
-  Design study — appearance only. This mockup does not type, capture the screen,
-  hide from anything, or interact with any other application. The see-through
-  slider is the single live control, and it restyles this mockup's own glass.
+  TypeIT — a hands-free dictation helper. Speak, review and edit the text here,
+  then send it where you need it. It records the microphone only while you hold
+  Dictate on, and transcribes via Deepgram. It does not capture the screen or
+  hide itself from your system. The see-through slider restyles this window's
+  own glass.
 </p>
 
 <script>
@@ -730,3 +821,6 @@
     });
   })();
 </script>
+
+<!-- Dictation: mic capture -> Deepgram streaming STT -> editable transcript -->
+<script src="dictation.js"></script>

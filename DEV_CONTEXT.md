@@ -36,9 +36,13 @@ ordinary desktop tool.
 
 ## Roadmap / pending
 
-- [ ] **Deepgram streaming** — mic → live transcript into an editable box in the
-      widget (first build step). Prompt for and locally store the API key
-      (never hardcoded).
+- [~] **Deepgram streaming** — mic → live transcript into an editable box.
+      *Done:* `app/src/dictation.js` (getUserMedia → 16 kHz linear16 PCM →
+      Deepgram realtime WS via `["token", key]` subprotocol; interim/final
+      handling, KeepAlive, clean teardown), transcript/interim/mic/clear/copy UI
+      in `index.html`, API key stored in `localStorage`, macOS mic Info.plist.
+      *Left:* verify on a native build (WSL can't run it); move the key to an OS
+      keychain later; consider AudioWorklet over the deprecated ScriptProcessor.
 - [ ] **Type-into-focused-window** — deliver the reviewed text as keystrokes to
       the foreground app; global hotkey to trigger.
 - [ ] **Notes history** — persist the last ~20 captures locally; UI to browse
@@ -50,6 +54,29 @@ ordinary desktop tool.
       configurable opacity hotkey.
 
 ---
+
+## 2026-09-17 — Deepgram dictation (first feature) wired in
+
+- **Added `app/src/dictation.js`** — the mic→STT pipeline: `getUserMedia`
+  (mono, echo/noise-cancel) → `AudioContext` + `ScriptProcessorNode` → Float32
+  downsampled to 16 kHz `linear16` PCM → Deepgram realtime WebSocket
+  (`wss://api.deepgram.com/v1/listen`, model `nova-2`, `smart_format`,
+  `punctuate`, `interim_results`). Browser WS can't set headers, so auth uses
+  the `["token", <key>]` subprotocol. Interim words show in the accent line;
+  finals append to the editable textarea. KeepAlive every 8s; `CloseStream` +
+  full graph teardown on stop.
+- **`index.html`** — replaced the static mockup compose area with a real
+  `<textarea>` transcript + interim line, a mic toggle (red while listening),
+  status readout, Clear, and Copy (clipboard; interim stand-in until keystroke
+  delivery lands). API-key bar shows until a key is saved to `localStorage`.
+  Refreshed the meta description and on-page disclaimer to describe the tool
+  honestly (records mic only while dictating; no screen capture / no hiding).
+- **Native mic:** added `src-tauri/Info.plist` with
+  `NSMicrophoneUsageDescription` (WKWebView needs it or macOS denies the mic);
+  documented Windows/macOS mic prompts + Deepgram key in `BUILD.md`.
+- **No new Tauri/Rust permissions** needed — capture, WS, and clipboard all run
+  in the webview (CSP is `null`).
+- **Not yet verified natively** (no GUI/mic in the WSL dev box).
 
 ## 2026-09-17 — Pivot to dictation tool
 
