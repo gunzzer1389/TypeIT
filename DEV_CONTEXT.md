@@ -43,8 +43,12 @@ ordinary desktop tool.
       in `index.html`, API key stored in `localStorage`, macOS mic Info.plist.
       *Left:* verify on a native build (WSL can't run it); move the key to an OS
       keychain later; consider AudioWorklet over the deprecated ScriptProcessor.
-- [ ] **Type-into-focused-window** — deliver the reviewed text as keystrokes to
-      the foreground app; global hotkey to trigger.
+- [~] **Type-into-focused-window** — deliver reviewed text as keystrokes to the
+      foreground app. *Done:* `enigo` in Cargo; `type_text` (hides window →
+      250 ms → types) and `set_pending_text` commands + `Ctrl+Shift+Enter`
+      global hotkey (`lib.rs`); "Type it" button + hotkey sync (`dictation.js`).
+      *Left:* native verify; macOS needs Accessibility permission granted;
+      can't type into elevated apps on Windows unless TypeIT is elevated.
 - [ ] **Notes history** — persist the last ~20 captures locally; UI to browse
       and re-send them.
 - [ ] User builds the shell on Windows and/or macOS (`app/BUILD.md`) and reports
@@ -54,6 +58,27 @@ ordinary desktop tool.
       configurable opacity hotkey.
 
 ---
+
+## 2026-09-17 — Type-into-focused-window
+
+- **`Cargo.toml`** — added `enigo = "0.2"` for cross-platform keystroke
+  synthesis (Windows SendInput, macOS CGEvent, Linux X11/Wayland).
+- **`lib.rs`** — new `PendingText(Mutex<String>)` app state; commands
+  `set_pending_text` (frontend keeps it synced, debounced) and `type_text`
+  (async: hides our window so the prior app refocuses → 250 ms on a blocking
+  thread → types). Registered a second global shortcut **Ctrl+Shift+Enter**
+  that types the pending text into whatever you've focused (no hide, since the
+  target is already frontmost). Scope note rewritten: delivers to the
+  *foreground* window only; no window targeting/enumeration, no capture, no
+  process hiding.
+- **`index.html` / `dictation.js`** — "Type it" primary button (Copy demoted to
+  a ghost button); button hides+types via `type_text`, and the transcript is
+  pushed to Rust on input so the hotkey path works when the webview is blurred.
+  Disclaimer updated with the two type paths.
+- **macOS caveat:** `enigo` needs **Accessibility** permission or typing is
+  silently blocked; documented in `BUILD.md`. **Windows caveat:** can't type
+  into elevated apps unless TypeIT is elevated too.
+- **Not yet verified natively.**
 
 ## 2026-09-17 — Deepgram dictation (first feature) wired in
 

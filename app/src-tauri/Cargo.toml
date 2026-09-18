@@ -1,6 +1,7 @@
-# Cargo manifest for the TypeIT visual shell.
-# Kept intentionally small: a Tauri v2 desktop window plus the global-shortcut
-# plugin for a show/hide accelerator. No input-simulation / capture crates.
+# Cargo manifest for TypeIT.
+# A Tauri v2 desktop window, the global-shortcut plugin (show/hide + a
+# type-it accelerator), and enigo for delivering the reviewed transcript as
+# keystrokes into whatever window you have focused. No screen-capture crates.
 [package]
 name = "typeit"
 version = "0.1.0"
@@ -20,8 +21,11 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-# Registers OS-level global shortcuts (used only to toggle THIS window).
+# Registers OS-level global shortcuts (toggle THIS window + type-it trigger).
 tauri-plugin-global-shortcut = "2"
+# Cross-platform keystroke synthesis: types the reviewed text into the
+# foreground window (Windows SendInput, macOS CGEvent, Linux X11/Wayland).
+enigo = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

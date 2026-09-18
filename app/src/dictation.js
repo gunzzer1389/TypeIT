@@ -291,6 +291,51 @@
     });
   }
 
+  // ---------------------------------------------------------------------
+  // Type into the focused window (Tauri only).
+  //
+  //   * Type it button -> `type_text`: hides our window so the app you had
+  //     focused regains focus, then types the transcript there.
+  //   * Ctrl+Shift+Enter (global) -> types the "pending" text into whatever
+  //     you've clicked into. We keep that pending text in sync below.
+  //
+  // In a plain browser (no __TAURI__) the button just shows a hint, so the
+  // same file still previews over http://localhost.
+  // ---------------------------------------------------------------------
+  var typeBtn = document.getElementById("typeBtn");
+  var tauri = window.__TAURI__;
+  var invoke = tauri && tauri.core && tauri.core.invoke;
+
+  // Keep the Rust side's copy of the transcript current (debounced), so the
+  // global hotkey has something to type when the webview isn't focused.
+  if (invoke) {
+    var syncTimer = null;
+    transcriptEl.addEventListener("input", function () {
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(function () {
+        invoke("set_pending_text", { text: transcriptEl.value }).catch(function () {});
+      }, 200);
+    });
+  }
+
+  if (typeBtn) {
+    typeBtn.addEventListener("click", async function () {
+      var text = transcriptEl.value.trim();
+      if (!text) { setStatus("Nothing to type", "error"); return; }
+      if (!invoke) { setStatus("Type-it needs the desktop app", "error"); return; }
+      if (listening) stop(); // don't type our own mic stream
+      setStatus("Typing…");
+      try {
+        await invoke("set_pending_text", { text: text });
+        await invoke("type_text", { text: text });
+        setStatus("Typed", "live");
+      } catch (err) {
+        setStatus("Type failed", "error");
+        console.error("type_text failed:", err);
+      }
+    });
+  }
+
   // Stop cleanly if the window goes away mid-dictation.
   window.addEventListener("beforeunload", cleanup);
 

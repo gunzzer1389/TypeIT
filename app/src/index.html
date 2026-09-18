@@ -641,9 +641,11 @@
         </button>
         <span id="dictStatus" class="dict-status" role="status">Idle</span>
         <button id="clearBtn" class="ghost-btn" type="button" title="Clear the transcript">Clear</button>
-        <button id="copyBtn" class="send" type="button" title="Copy transcript to clipboard">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-          <span>Copy</span>
+        <button id="copyBtn" class="ghost-btn" type="button" title="Copy transcript to clipboard">Copy</button>
+        <button id="typeBtn" class="send" type="button"
+          title="Type the text into the app you had focused. Or click into your target and press Ctrl+Shift+Enter.">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 14-7-7 14-2-5-5-2Z"/></svg>
+          <span>Type it</span>
         </button>
       </div>
     </div>
@@ -710,10 +712,11 @@
 
 <p class="disclaimer">
   TypeIT — a hands-free dictation helper. Speak, review and edit the text here,
-  then send it where you need it. It records the microphone only while you hold
-  Dictate on, and transcribes via Deepgram. It does not capture the screen or
-  hide itself from your system. The see-through slider restyles this window's
-  own glass.
+  then <b>Type it</b> into the app you had focused (or click into your target and
+  press Ctrl+Shift+Enter). It records the microphone only while you hold Dictate
+  on, transcribes via Deepgram, and types only when you ask it to. It does not
+  capture the screen or hide itself from your system. The see-through slider
+  restyles this window's own glass.
 </p>
 
 <script>

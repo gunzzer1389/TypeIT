@@ -84,6 +84,25 @@ frameless translucent widget appears, centered and on top. Try:
   mode) — auth failures surface as a `Key rejected` status, mic issues as
   `Mic blocked`.
 
+## 4c. Type-into-focused-window
+
+Two ways to send the reviewed text to another app:
+
+- **Type it button** — hides the TypeIT window (so the app you had focused comes
+  back to the front) and types the transcript there.
+- **Ctrl+Shift+Enter** (global) — click into your target first (email, chat,
+  comment box), then press it; TypeIT types the current transcript there.
+
+Keystrokes are synthesized with [`enigo`](https://crates.io/crates/enigo).
+
+- **macOS:** typing requires **Accessibility** permission. The first attempt is
+  usually blocked silently — grant TypeIT under System Settings → Privacy &
+  Security → **Accessibility**, then try again. (In `npm run dev` the host is the
+  terminal/`Tauri` dev binary; a packaged `.app` prompts as itself.)
+- **Windows:** `SendInput` works without special permission, but it can't type
+  into an app running **as administrator** unless TypeIT is elevated too.
+- Show/hide TypeIT anytime with **Ctrl+Shift+Space**.
+
 ## 5. Build a distributable
 
 ```bash
