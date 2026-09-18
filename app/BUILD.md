@@ -130,16 +130,21 @@ steadier. The range is remembered between runs.
 - **Titlebar dots:** red = **Quit** the app (also **Ctrl+Shift+Q**), yellow =
   **hide to tray** (reopen with **Ctrl+Shift+Space**), green = toggle
   always-on-top.
-- **Quitting:** the red dot, **Ctrl+Shift+Q**, or the **tray** icon → **Quit
-  TypeIT** all fully quit. Fully quitting matters before installing an update,
-  since a running copy locks its files.
+- **Quitting:** the red titlebar dot or **Ctrl+Shift+Q** fully quits. Fully
+  quitting matters before installing an update, since a running copy locks its
+  files. (If you ever lose the hotkeys, end it from Task Manager / Activity
+  Monitor.)
 - **Updating:** quit the old copy (tray → Quit), then run the new installer; the
   version bump lets it replace the previous install. Only one TypeIT runs at a
   time — launching a second copy just focuses the existing window.
-- **No taskbar/Dock button:** TypeIT runs as a background tray app (Windows:
-  `skipTaskbar`; macOS: menu-bar accessory, no Dock icon). Reach it via the
-  **tray icon** or **Ctrl+Shift+Space**. It's still an ordinary process visible
-  in Task Manager / Activity Monitor — nothing is hidden from the system.
+- **No icon anywhere (hotkey-only):** no taskbar button (Windows `skipTaskbar`),
+  no Dock icon (macOS accessory), and no tray/menu-bar icon. Reach it only via
+  **Ctrl+Shift+Space** (show/hide) and **Ctrl+Shift+Q** (quit). It's still an
+  ordinary process visible in Task Manager / Activity Monitor — the process is
+  not hidden from the system.
+- **Auto-sized window:** the transparent window resizes to hug the visible UI
+  (small when Settings is closed, taller when open), so empty transparent area
+  doesn't block clicks to the app behind it.
 
 ## 4d. Logs (for troubleshooting)
 

@@ -21,8 +21,6 @@ use std::time::Duration;
 
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use serde::Serialize;
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_log::{Target, TargetKind};
@@ -740,40 +738,10 @@ pub fn run() {
                 Err(e) => log::error!("quit shortcut not registered: {e}"),
             }
 
-            // System tray: gives the app a real Quit (window close only hides),
-            // plus a Show/Hide toggle. Without a way to quit, an old instance
-            // lingers in the background and locks its files against upgrades.
-            let show_item = MenuItem::with_id(app, "show", "Show / Hide", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit TypeIT", true, None::<&str>)?;
-            let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
-            if let Some(icon) = app.default_window_icon().cloned() {
-                TrayIconBuilder::with_id("main-tray")
-                    .icon(icon)
-                    .tooltip("TypeIT")
-                    .menu(&tray_menu)
-                    .on_menu_event(|app, event| match event.id.as_ref() {
-                        "quit" => {
-                            log::info!("quit from tray");
-                            app.exit(0);
-                        }
-                        "show" => {
-                            if let Some(win) = app.get_webview_window("main") {
-                                let visible = win.is_visible().unwrap_or(false);
-                                if visible {
-                                    let _ = win.hide();
-                                } else {
-                                    let _ = win.show();
-                                    let _ = win.set_focus();
-                                }
-                            }
-                        }
-                        _ => {}
-                    })
-                    .build(app)?;
-                log::info!("tray icon created");
-            } else {
-                log::error!("no default window icon; tray not created");
-            }
+            // No tray / menu-bar icon by design: TypeIT is controlled purely by
+            // global hotkeys (Ctrl+Shift+Space show/hide, Ctrl+Shift+Q quit) and
+            // the red titlebar dot. It still appears in Task Manager / Activity
+            // Monitor as a normal process.
 
             // Make sure the window is actually shown, unminimized, and focused.
             if let Some(win) = app.get_webview_window("main") {

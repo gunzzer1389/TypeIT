@@ -59,12 +59,16 @@
        widget. (In the browser-hosted mockup this was a painted desktop
        scene; here the actual desktop is the backdrop.) */
     background: transparent;
-    min-height: 100%;
+    /* The native window is auto-sized to this content (see dictation.js), so
+       the body hugs the widget instead of leaving a big transparent area that
+       would eat clicks meant for the app behind it. Small padding leaves room
+       for the widget's drop shadow. */
+    min-height: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 22px;
-    padding: 40px 16px 56px;
+    gap: 14px;
+    padding: 8px;
   }
 
   /* Soft out-of-focus "wallpaper" blobs to sell depth behind the glass */
@@ -258,6 +262,8 @@
     line-height: 1.7;
     outline: none;
     min-height: 96px;
+    max-height: 220px; /* long transcripts scroll here instead of growing the window */
+    overflow-y: auto;
   }
   .transcript::placeholder { color: var(--ink-faint); }
   .interim {

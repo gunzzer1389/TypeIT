@@ -67,6 +67,21 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — Hotkey-only (no tray) + auto-size window to content
+
+- **Removed the tray/menu-bar icon** on both platforms (user: no icon in menu
+  bar/anywhere). App is now hotkey-only: Ctrl+Shift+Space show/hide,
+  Ctrl+Shift+Q quit, red dot quits when visible. Dropped `tauri` `tray-icon`
+  feature + `menu`/`tray` imports.
+- **Declined** hiding from Task Manager / Activity Monitor — process concealment,
+  out of scope; stays a normal visible process.
+- **Auto-size window to content (fixes transparent dead-zone eating clicks):**
+  `dictation.js` observes `.stage` (ResizeObserver, rAF-debounced) and calls
+  `getCurrentWindow().setSize(LogicalSize(w,h))`; width locked from first layout
+  to avoid reflow oscillation. Body padding 40/16/56→8, `min-height:100%`→auto;
+  transcript capped `max-height:220px` + internal scroll. tauri.conf min size
+  lowered (320×80), initial height 460. Added `core:window:allow-set-size`.
+
 ## 2026-09-18 — macOS parity for focus features (AppKit)
 
 - Goal: make the three Windows-only behaviours work on macOS too, so both builds

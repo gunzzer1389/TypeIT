@@ -506,6 +506,32 @@
     });
   }
 
+  // --- Auto-size the native window to hug the visible UI ----------------
+  // The window is transparent, so any empty area still swallows clicks meant
+  // for the app behind it. Resize the OS window to the content whenever it
+  // changes (Settings open/close, transcript growth, Resume showing, etc.).
+  (function () {
+    var winApi = tauri && tauri.window;
+    var stage = document.querySelector(".stage");
+    if (!winApi || !stage || !window.ResizeObserver) return;
+    var PAD = 8;
+    var lockedW = 0;
+    var pending = 0;
+    function fit() {
+      pending = 0;
+      var r = stage.getBoundingClientRect();
+      // Lock the width from the first layout so reflow can't oscillate it.
+      if (!lockedW) lockedW = Math.ceil(r.width) + PAD * 2;
+      var h = Math.max(80, Math.ceil(r.height) + PAD * 2);
+      try {
+        winApi.getCurrentWindow().setSize(new winApi.LogicalSize(lockedW, h));
+      } catch (e) {}
+    }
+    function schedule() { if (!pending) pending = requestAnimationFrame(fit); }
+    new ResizeObserver(schedule).observe(stage);
+    schedule();
+  })();
+
   // Stop cleanly if the window goes away mid-dictation.
   window.addEventListener("beforeunload", cleanup);
 

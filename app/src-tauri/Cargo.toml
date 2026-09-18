@@ -4,7 +4,7 @@
 # keystrokes into whatever window you have focused. No screen-capture crates.
 [package]
 name = "typeit"
-version = "0.2.1"
+version = "0.2.2"
 description = "TypeIT visual shell (frameless translucent widget)"
 edition = "2021"
 rust-version = "1.77"
@@ -20,9 +20,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# tray-icon: system-tray entry with a Quit item (so the app can be closed, not
-# just hidden — a lingering instance would lock files and block upgrades).
-tauri = { version = "2", features = ["tray-icon"] }
+# No tray-icon: TypeIT is hotkey-only (no dock/taskbar/menu-bar presence).
+tauri = { version = "2", features = [] }
 # Ensures only one TypeIT runs; a second launch focuses the existing window.
 tauri-plugin-single-instance = "2"
 # Registers OS-level global shortcuts (toggle THIS window + type-it trigger).
