@@ -21,7 +21,9 @@
 
   var KEY_STORE = "typeit.deepgram.key";
   var TARGET_RATE = 16000; // what we tell Deepgram we're sending
-  var DEEPGRAM_SIGNUP = "https://console.deepgram.com/signup";
+  // Console root: signs existing users in and lands on their keys; new users can
+  // sign up from the same page.
+  var DEEPGRAM_CONSOLE = "https://console.deepgram.com/";
 
   // --- Tauri bridge (undefined in a plain browser preview) --------------
   var tauri  = window.__TAURI__;
@@ -100,7 +102,7 @@
     });
   }
   if (getKeyBtn) {
-    getKeyBtn.addEventListener("click", function () { openExternal(DEEPGRAM_SIGNUP); });
+    getKeyBtn.addEventListener("click", function () { openExternal(DEEPGRAM_CONSOLE); });
   }
 
   // ---------------------------------------------------------------------

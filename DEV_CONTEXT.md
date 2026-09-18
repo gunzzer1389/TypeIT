@@ -66,7 +66,7 @@ ordinary desktop tool.
 - **Key management now lives in the gear/settings popover** (renamed aria-label
   to "Settings") as a "Deepgram API key" section: password input, Save, a status
   line ("Key saved ✓" / "No key saved"), and a **Get a Deepgram API key** button
-  → opens `https://console.deepgram.com/signup`. Removed the one-shot top key bar
+  → opens `https://console.deepgram.com/` (sign-in / keys). Removed the one-shot top key bar
   (it vanished after first save, leaving no way to change a bad key).
 - Pressing **Dictate** with no key now opens the settings panel and focuses the
   field instead of a dead-end error.
