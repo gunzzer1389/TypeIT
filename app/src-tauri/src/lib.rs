@@ -14,6 +14,7 @@
 // app regains focus) or a global hotkey (after you click into your target).
 // ---------------------------------------------------------------------------
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -84,13 +85,41 @@ impl Rng {
     }
 }
 
+/// True while a typing operation is running, so a second trigger (button +
+/// hotkey, or a double hotkey press) can't start a concurrent stream — that
+/// interleaves characters and scrambles the output.
+static TYPING: AtomicBool = AtomicBool::new(false);
+
+/// Set to request the in-flight typing loop to stop (Stop button / hotkey).
+static CANCEL: AtomicBool = AtomicBool::new(false);
+
+/// Clears the TYPING flag on drop, so it is released even on early return.
+struct TypingGuard;
+impl Drop for TypingGuard {
+    fn drop(&mut self) {
+        TYPING.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Synthesize `text` into the focused window one character at a time. Each
 /// character's pause corresponds to a wpm picked uniformly in [min, max], so
 /// the overall pace varies naturally and averages near the band's midpoint.
-fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<(), String> {
+/// Returns the number of characters actually typed. If it's less than the
+/// text length, typing was cancelled (Stop) — the caller can resume with the
+/// remaining slice. Character counting is by Unicode scalar (`chars`), matching
+/// the frontend's `Array.from(text)` so resume slicing lines up.
+fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<usize, String> {
     if text.trim().is_empty() {
         return Err("Nothing to type".into());
     }
+    // Refuse to start if another typing pass is already in flight.
+    if TYPING.swap(true, Ordering::SeqCst) {
+        log::warn!("type request ignored: already typing");
+        return Err("Already typing".into());
+    }
+    let _guard = TypingGuard; // releases TYPING when this function returns
+    CANCEL.store(false, Ordering::SeqCst); // fresh run
+
     let (lo, hi) = normalize_range(min_wpm, max_wpm);
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
         log::error!("enigo init failed: {e}");
@@ -98,16 +127,21 @@ fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<(), Strin
     })?;
     let mut rng = Rng::seeded();
     let mut buf = [0u8; 4];
+    let mut typed = 0usize;
     for ch in text.chars() {
-        let wpm = rng.in_range(lo, hi);
+        if CANCEL.load(Ordering::SeqCst) {
+            log::info!("typing stopped after {typed} chars");
+            return Ok(typed);
+        }
         enigo.text(ch.encode_utf8(&mut buf)).map_err(|e| {
             log::error!("enigo type failed: {e}");
             e.to_string()
         })?;
-        std::thread::sleep(per_char_delay(wpm));
+        typed += 1;
+        std::thread::sleep(per_char_delay(rng.in_range(lo, hi)));
     }
-    log::info!("typed {} chars at {}-{} wpm", text.chars().count(), lo, hi);
-    Ok(())
+    log::info!("typed {typed} chars at {lo}-{hi} wpm");
+    Ok(typed)
 }
 
 /// Flip always-on-top from the UI. `window` is always this app's own window.
@@ -151,7 +185,7 @@ async fn type_text(
     text: String,
     min_wpm: u32,
     max_wpm: u32,
-) -> Result<(), String> {
+) -> Result<usize, String> {
     let _ = window.hide();
     tauri::async_runtime::spawn_blocking(move || {
         std::thread::sleep(Duration::from_millis(250));
@@ -159,6 +193,13 @@ async fn type_text(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Request the in-flight typing to stop (Stop button; also the Stop hotkey).
+#[tauri::command]
+fn stop_typing() {
+    CANCEL.store(true, Ordering::SeqCst);
+    log::info!("stop_typing requested");
 }
 
 /// Application bootstrap. Called from main.rs.
@@ -169,6 +210,9 @@ pub fn run() {
     // Type the pending transcript into the foreground app. Use this after you
     // click into your target (email, chat, comment box).
     let type_it = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Enter);
+    // Stop the in-flight typing from anywhere (the window is hidden while the
+    // button types, so Stop has to be global).
+    let stop_it = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Backspace);
 
     // Log panics to the log file too, so a startup crash leaves a trace.
     std::panic::set_hook(Box::new(|info| {
@@ -219,6 +263,9 @@ pub fn run() {
                                 }
                             }
                         }
+                    } else if shortcut == &stop_it {
+                        CANCEL.store(true, Ordering::SeqCst);
+                        log::info!("stop via hotkey");
                     } else if shortcut == &type_it {
                         // Target app is already focused (you clicked into it),
                         // so type straight away — no hide needed. Do it on its
@@ -264,6 +311,10 @@ pub fn run() {
                 Ok(_) => log::info!("registered type-it (Ctrl+Shift+Enter)"),
                 Err(e) => log::error!("type-it shortcut not registered: {e}"),
             }
+            match app.global_shortcut().register(stop_it) {
+                Ok(_) => log::info!("registered stop (Ctrl+Shift+Backspace)"),
+                Err(e) => log::error!("stop shortcut not registered: {e}"),
+            }
 
             // System tray: gives the app a real Quit (window close only hides),
             // plus a Show/Hide toggle. Without a way to quit, an old instance
@@ -302,6 +353,8 @@ pub fn run() {
 
             // Make sure the window is actually shown, unminimized, and focused.
             if let Some(win) = app.get_webview_window("main") {
+                // Enforce no taskbar button even if the config flag is missed.
+                let _ = win.set_skip_taskbar(true);
                 let _ = win.show();
                 let _ = win.unminimize();
                 let _ = win.set_focus();
@@ -318,7 +371,8 @@ pub fn run() {
             open_url,
             set_pending_text,
             set_speed_range,
-            type_text
+            type_text,
+            stop_typing
         ])
         .run(tauri::generate_context!())
         .expect("error while running TypeIT");

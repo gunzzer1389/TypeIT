@@ -328,6 +328,9 @@
     border-radius: var(--radius-pill); padding: 8px 13px; cursor: pointer;
   }
   .ghost-btn:hover { color: var(--ink); }
+  .stop-btn { color: #ff8a8a; border-color: rgba(255,138,138,0.4); }
+  .stop-btn:hover { color: #ffb3b3; }
+  .send:disabled { opacity: 0.5; cursor: default; }
 
   /* Typing-speed control — words per minute, adjustable by field or steppers. */
   .speed-row {
@@ -693,6 +696,8 @@
         <span id="dictStatus" class="dict-status" role="status">Idle</span>
         <button id="clearBtn" class="ghost-btn" type="button" title="Clear the transcript">Clear</button>
         <button id="copyBtn" class="ghost-btn" type="button" title="Copy transcript to clipboard">Copy</button>
+        <button id="stopBtn" class="ghost-btn stop-btn" type="button" hidden
+          title="Stop typing (Ctrl+Shift+Backspace)">Stop</button>
         <button id="typeBtn" class="send" type="button"
           title="Type the text into the app you had focused. Or click into your target and press Ctrl+Shift+Enter.">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 14-7-7 14-2-5-5-2Z"/></svg>

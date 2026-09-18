@@ -109,6 +109,11 @@ steadier. The range is remembered between runs.
 - **Windows:** `SendInput` works without special permission, but it can't type
   into an app running **as administrator** unless TypeIT is elevated too.
 - Show/hide TypeIT anytime with **Ctrl+Shift+Space**.
+- **Stop typing:** press **Ctrl+Shift+Backspace** (works even while the window
+  is hidden), or the on-screen **Stop** button when the window is visible. You
+  can't re-trigger Type it while a pass is running (that used to interleave and
+  scramble the text). After a Stop, the **untyped remainder stays in the box**,
+  so editing it and pressing Type it again resumes from where it left off.
 - **Quitting:** closing the window only *hides* it (reopen with the hotkey). To
   fully quit, use the **system tray** icon → **Quit TypeIT**. Fully quitting
   matters before installing an update, since a running copy locks its files.

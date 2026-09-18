@@ -65,6 +65,27 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — Stop / no-double-type / resume from where it left off
+
+- **Reported:** hitting Type it again mid-run started a second pass → interleaved
+  characters, scrambled output; had to wait it out and kill via Task Manager.
+- **Fixes (`lib.rs`):** `static TYPING` guard (a second call returns
+  `Err("Already typing")` instead of running concurrently — the real cause);
+  `static CANCEL` checked each char so typing can be stopped; `type_string_range`
+  returns chars typed (`usize`); `stop_typing` command + global **Stop hotkey
+  Ctrl+Shift+Backspace** (Stop must be global since the button path hides the
+  window). `type_text` returns the typed count.
+- **Frontend:** Type it disables itself + shows **Stop** while running; on a
+  partial (stopped) result it puts the *remaining* text back in the box (sliced
+  by `Array.from` to match Rust `chars()`) so the next Type it resumes. Stop
+  button calls `stop_typing`.
+- **Taskbar:** also call `win.set_skip_taskbar(true)` in setup (belt-and-braces
+  with the config flag), since the user still saw the icon (was on a pre-0.1.2
+  build).
+- **Deferred:** auto-stop when focus leaves the target window + resume-on-return
+  — needs OS foreground-window watching (Win32/AppKit FFI) that can't be tested
+  from WSL; doing it next so a compile risk there can't block this working core.
+
 ## 2026-09-18 — Speed as a range + tray-only (no taskbar)
 
 - **Typing speed is now a min–max range** (defaults 180–220). `lib.rs`:

@@ -393,21 +393,52 @@
     });
   }
 
+  var stopBtn = document.getElementById("stopBtn");
+
+  // While typing: disable Type it (prevents the double-trigger that scrambles
+  // output) and reveal Stop.
+  function setTypingUI(on) {
+    if (typeBtn) typeBtn.disabled = on;
+    if (stopBtn) stopBtn.hidden = !on;
+  }
+
+  if (stopBtn) {
+    stopBtn.addEventListener("click", function () {
+      if (invoke) invoke("stop_typing").catch(function () {});
+    });
+  }
+
   if (typeBtn) {
     typeBtn.addEventListener("click", async function () {
+      if (typeBtn.disabled) return;
       var text = transcriptEl.value.trim();
       if (!text) { setStatus("Nothing to type", "error"); return; }
       if (!invoke) { setStatus("Type-it needs the desktop app", "error"); return; }
       if (listening) stop(); // don't type our own mic stream
       var r = currentRange();
+      setTypingUI(true);
       setStatus("Typing…");
       try {
         await invoke("set_pending_text", { text: text });
-        await invoke("type_text", { text: text, minWpm: r[0], maxWpm: r[1] });
-        setStatus("Typed", "live");
+        var typed = await invoke("type_text", { text: text, minWpm: r[0], maxWpm: r[1] });
+        // Rust returns how many characters it actually typed. If fewer than the
+        // whole text, it was stopped — leave the remaining text in the box so
+        // the next Type it resumes from where it left off.
+        var cps = Array.from(text);
+        if (typeof typed === "number" && typed < cps.length) {
+          var remaining = cps.slice(typed).join("");
+          transcriptEl.value = remaining;
+          invoke("set_pending_text", { text: remaining }).catch(function () {});
+          setStatus("Stopped · " + (cps.length - typed) + " left", "error");
+        } else {
+          setStatus("Typed", "live");
+        }
       } catch (err) {
-        setStatus("Type failed", "error");
+        var msg = String(err);
+        setStatus(msg.indexOf("Already") >= 0 ? "Already typing" : "Type failed", "error");
         console.error("type_text failed:", err);
+      } finally {
+        setTypingUI(false);
       }
     });
   }
