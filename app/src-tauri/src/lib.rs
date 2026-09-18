@@ -236,17 +236,20 @@ fn foreground() -> (isize, u32) {
 }
 #[cfg(target_os = "macos")]
 fn foreground() -> (isize, u32) {
-    use objc2_app_kit::NSWorkspace;
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    // Frontmost app's pid via NSWorkspace. We key everything off the pid.
     unsafe {
-        let ws = NSWorkspace::sharedWorkspace();
-        match ws.frontmostApplication() {
-            // On macOS we key everything off the app's process id.
-            Some(app) => {
-                let pid = app.processIdentifier();
-                (pid as isize, pid as u32)
-            }
-            None => (0, 0),
+        let ws: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
+        if ws.is_null() {
+            return (0, 0);
         }
+        let app: *mut AnyObject = msg_send![ws, frontmostApplication];
+        if app.is_null() {
+            return (0, 0);
+        }
+        let pid: i32 = msg_send![app, processIdentifier];
+        (pid as isize, pid as u32)
     }
 }
 #[cfg(not(any(windows, target_os = "macos")))]
@@ -273,17 +276,24 @@ fn set_foreground(hwnd: isize) -> bool {
 }
 #[cfg(target_os = "macos")]
 fn set_foreground(pid: isize) -> bool {
-    use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
     if pid == 0 {
         return false;
     }
     unsafe {
-        match NSRunningApplication::runningApplicationWithProcessIdentifier(pid as i32) {
-            Some(app) => app.activateWithOptions(
-                NSApplicationActivationOptions::NSApplicationActivateIgnoringOtherApps,
-            ),
-            None => false,
+        let app: *mut AnyObject = msg_send![
+            class!(NSRunningApplication),
+            runningApplicationWithProcessIdentifier: pid as i32
+        ];
+        if app.is_null() {
+            return false;
         }
+        // NSApplicationActivateIgnoringOtherApps = 1 << 1 (harmless no-op on
+        // macOS 14+, still activates the app).
+        let options: usize = 1 << 1;
+        let ok: bool = msg_send![app, activateWithOptions: options];
+        ok
     }
 }
 #[cfg(not(any(windows, target_os = "macos")))]
