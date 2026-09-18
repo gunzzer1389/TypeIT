@@ -29,15 +29,25 @@ use tauri_plugin_opener::OpenerExt;
 /// hotkey has something to type even when the webview isn't focused.
 struct PendingText(Mutex<String>);
 
-/// Typing speed in words-per-minute, kept in sync from the UI so the hotkey
-/// path types at the same rate as the button.
-struct Wpm(Mutex<u32>);
+/// Typing speed as a words-per-minute RANGE (min, max), kept in sync from the
+/// UI so the hotkey path types at the same pace as the button. Each character's
+/// speed is drawn from this band, so the realized average lands near the middle
+/// with natural, human-looking variation.
+struct SpeedRange(Mutex<(u32, u32)>);
 
 /// Sensible bounds: below ~10 wpm is uselessly slow, and 1000 wpm is already
 /// close to "as fast as the target app can keep up".
 const WPM_MIN: u32 = 10;
 const WPM_MAX: u32 = 1000;
-const WPM_DEFAULT: u32 = 240;
+const DEFAULT_MIN: u32 = 180;
+const DEFAULT_MAX: u32 = 220;
+
+/// Clamp both ends to the allowed bounds and make sure min <= max.
+fn normalize_range(min: u32, max: u32) -> (u32, u32) {
+    let a = min.clamp(WPM_MIN, WPM_MAX);
+    let b = max.clamp(WPM_MIN, WPM_MAX);
+    (a.min(b), a.max(b))
+}
 
 /// Per-character pause for a given wpm. Uses the standard 5-characters-per-word
 /// convention: chars/min = wpm * 5, so ms/char = 60_000 / (wpm * 5) = 12_000/wpm.
@@ -46,26 +56,57 @@ fn per_char_delay(wpm: u32) -> Duration {
     Duration::from_millis((12_000 / wpm) as u64)
 }
 
-/// Synthesize `text` into the focused window one character at a time, pausing
-/// `delay` between characters so the typing runs at the requested speed.
-fn type_string_at(text: &str, wpm: u32) -> Result<(), String> {
+/// Tiny dependency-free PRNG (xorshift64), seeded from the clock. Good enough
+/// for jittering typing speed — this is not security-sensitive randomness.
+struct Rng(u64);
+impl Rng {
+    fn seeded() -> Self {
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0x9E37_79B9_7F4A_7C15);
+        Rng(seed | 1) // never zero
+    }
+    fn next_u64(&mut self) -> u64 {
+        let mut x = self.0;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.0 = x;
+        x
+    }
+    /// Uniform integer in [lo, hi] inclusive.
+    fn in_range(&mut self, lo: u32, hi: u32) -> u32 {
+        if hi <= lo {
+            return lo;
+        }
+        lo + (self.next_u64() % (u64::from(hi - lo) + 1)) as u32
+    }
+}
+
+/// Synthesize `text` into the focused window one character at a time. Each
+/// character's pause corresponds to a wpm picked uniformly in [min, max], so
+/// the overall pace varies naturally and averages near the band's midpoint.
+fn type_string_range(text: &str, min_wpm: u32, max_wpm: u32) -> Result<(), String> {
     if text.trim().is_empty() {
         return Err("Nothing to type".into());
     }
-    let delay = per_char_delay(wpm);
+    let (lo, hi) = normalize_range(min_wpm, max_wpm);
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
         log::error!("enigo init failed: {e}");
         e.to_string()
     })?;
+    let mut rng = Rng::seeded();
     let mut buf = [0u8; 4];
     for ch in text.chars() {
+        let wpm = rng.in_range(lo, hi);
         enigo.text(ch.encode_utf8(&mut buf)).map_err(|e| {
             log::error!("enigo type failed: {e}");
             e.to_string()
         })?;
-        std::thread::sleep(delay);
+        std::thread::sleep(per_char_delay(wpm));
     }
-    log::info!("typed {} chars at {} wpm", text.chars().count(), wpm);
+    log::info!("typed {} chars at {}-{} wpm", text.chars().count(), lo, hi);
     Ok(())
 }
 
@@ -93,11 +134,11 @@ fn set_pending_text(text: String, state: tauri::State<PendingText>) {
     }
 }
 
-/// Frontend keeps this in sync with the wpm control.
+/// Frontend keeps this in sync with the speed-range control.
 #[tauri::command]
-fn set_wpm(wpm: u32, state: tauri::State<Wpm>) {
+fn set_speed_range(min_wpm: u32, max_wpm: u32, state: tauri::State<SpeedRange>) {
     if let Ok(mut guard) = state.0.lock() {
-        *guard = wpm.clamp(WPM_MIN, WPM_MAX);
+        *guard = normalize_range(min_wpm, max_wpm);
     }
 }
 
@@ -105,11 +146,16 @@ fn set_wpm(wpm: u32, state: tauri::State<Wpm>) {
 /// give the OS a beat to move focus back, then type at `wpm`. Runs on a
 /// blocking thread so neither the sleep nor the typing freezes the UI.
 #[tauri::command]
-async fn type_text(window: tauri::WebviewWindow, text: String, wpm: u32) -> Result<(), String> {
+async fn type_text(
+    window: tauri::WebviewWindow,
+    text: String,
+    min_wpm: u32,
+    max_wpm: u32,
+) -> Result<(), String> {
     let _ = window.hide();
     tauri::async_runtime::spawn_blocking(move || {
         std::thread::sleep(Duration::from_millis(250));
-        type_string_at(&text, wpm)
+        type_string_range(&text, min_wpm, max_wpm)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -181,21 +227,31 @@ pub fn run() {
                             .try_state::<PendingText>()
                             .and_then(|s| s.0.lock().ok().map(|g| g.clone()))
                             .unwrap_or_default();
-                        let wpm = app
-                            .try_state::<Wpm>()
+                        let (lo, hi) = app
+                            .try_state::<SpeedRange>()
                             .and_then(|s| s.0.lock().ok().map(|g| *g))
-                            .unwrap_or(WPM_DEFAULT);
+                            .unwrap_or((DEFAULT_MIN, DEFAULT_MAX));
                         std::thread::spawn(move || {
-                            let _ = type_string_at(&text, wpm);
+                            let _ = type_string_range(&text, lo, hi);
                         });
                     }
                 })
                 .build(),
         )
         .manage(PendingText(Mutex::new(String::new())))
-        .manage(Wpm(Mutex::new(WPM_DEFAULT)))
+        .manage(SpeedRange(Mutex::new((DEFAULT_MIN, DEFAULT_MAX))))
         .setup(move |app| {
             log::info!("TypeIT setup: starting");
+
+            // macOS: run as a menu-bar (accessory) app — no Dock icon, reached
+            // via the tray and the global hotkey. (Windows/Linux use the
+            // window's skipTaskbar flag in tauri.conf.json.) Not concealment:
+            // it's a normal process with a visible tray icon.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::ActivationPolicy;
+                app.set_activation_policy(ActivationPolicy::Accessory);
+            }
 
             // Register shortcuts but DON'T let a clash abort startup — if
             // another app owns the combo, we log it and carry on so the
@@ -261,7 +317,7 @@ pub fn run() {
             set_always_on_top,
             open_url,
             set_pending_text,
-            set_wpm,
+            set_speed_range,
             type_text
         ])
         .run(tauri::generate_context!())

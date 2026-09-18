@@ -363,7 +363,7 @@
     outline: none;
   }
   .wpm-input:focus { border-color: var(--accent); }
-  .wpm-unit { color: var(--ink-faint); }
+  .wpm-unit, .wpm-sep { color: var(--ink-faint); }
 
   .composer-bar {
     display: flex;
@@ -676,12 +676,13 @@
       </div>
 
       <div class="speed-row">
-        <label for="wpmInput">Typing speed</label>
-        <button id="wpmMinus" class="wpm-step" type="button" aria-label="Slower">−</button>
-        <input id="wpmInput" class="wpm-input" type="number" min="10" max="1000" step="10"
-               value="240" inputmode="numeric" aria-label="Typing speed in words per minute" />
+        <label>Typing speed</label>
+        <input id="wpmMin" class="wpm-input" type="number" min="10" max="1000" step="5"
+               value="180" inputmode="numeric" aria-label="Minimum words per minute" />
+        <span class="wpm-sep">to</span>
+        <input id="wpmMax" class="wpm-input" type="number" min="10" max="1000" step="5"
+               value="220" inputmode="numeric" aria-label="Maximum words per minute" />
         <span class="wpm-unit">wpm</span>
-        <button id="wpmPlus" class="wpm-step" type="button" aria-label="Faster">+</button>
       </div>
 
       <div class="composer-bar">

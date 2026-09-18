@@ -51,8 +51,12 @@ ordinary desktop tool.
       can't type into elevated apps on Windows unless TypeIT is elevated.
 - [ ] **Notes history** — persist the last ~20 captures locally; UI to browse
       and re-send them.
-- [x] **Typing speed (wpm)** — input box + −/+ steppers; paces keystroke
-      delivery. Stored in `localStorage`, synced to Rust for the hotkey path.
+- [x] **Typing speed range (wpm)** — min–max fields; backend jitters each
+      char's pace within the band (averages near midpoint). Stored in
+      `localStorage`, synced to Rust for the hotkey path.
+- [x] **Tray-only / no taskbar** — background utility: `skipTaskbar` (Win/Linux)
+      + macOS Accessory activation policy. Reached via tray + hotkey. Not
+      concealment — still a normal, visible process.
 - [ ] User builds the shell on Windows and/or macOS (`app/BUILD.md`) and reports
       how the transparent widget looks/behaves natively.
 - [ ] Iterate visual polish based on native rendering (blur, radius, sizing).
@@ -60,6 +64,22 @@ ordinary desktop tool.
       configurable opacity hotkey.
 
 ---
+
+## 2026-09-18 — Speed as a range + tray-only (no taskbar)
+
+- **Typing speed is now a min–max range** (defaults 180–220). `lib.rs`:
+  `SpeedRange(Mutex<(u32,u32)>)` state; `type_string_range()` picks each char's
+  wpm uniformly in [min,max] via a tiny dependency-free xorshift `Rng` (seeded
+  from the clock), so pace varies naturally and averages near the midpoint.
+  Commands `set_speed_range(min,max)` and `type_text(text,min,max)`; hotkey path
+  reads the range from state. Frontend: two number inputs (`wpmMin`/`wpmMax`),
+  ordered + clamped, persisted to `localStorage`, synced via `set_speed_range`
+  (camelCase `minWpm`/`maxWpm` → snake_case params, Tauri's default mapping).
+- **Runs as a background tray app, off the taskbar:** `skipTaskbar: true` in
+  `tauri.conf.json` (Windows/Linux) and `ActivationPolicy::Accessory` on macOS
+  (no Dock icon). Reached via the tray icon + `Ctrl+Shift+Space`. This is normal
+  tray-utility behavior, NOT the out-of-scope concealment (still a visible
+  process in Task Manager/Activity Monitor).
 
 ## 2026-09-18 — Clean upgrades: tray Quit, single-instance, version bump
 

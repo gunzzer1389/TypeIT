@@ -96,9 +96,11 @@ Two ways to send the reviewed text to another app:
   comment box), then press it; TypeIT types the current transcript there.
 
 Keystrokes are synthesized with [`enigo`](https://crates.io/crates/enigo). Set
-the pace with the **Typing speed** field (words per minute, 10–1000; −/+ to
-nudge). Higher is faster but some apps drop characters if it's too fast; lower
-is steadier. The setting is remembered between runs.
+the pace with the **Typing speed** range (min–max words per minute, 10–1000).
+Each character's speed is jittered between the two ends in the backend, so the
+typing varies naturally and averages near the midpoint (e.g. 180–220 ≈ ~200).
+Higher is faster but some apps drop characters if it's too fast; lower is
+steadier. The range is remembered between runs.
 
 - **macOS:** typing requires **Accessibility** permission. The first attempt is
   usually blocked silently — grant TypeIT under System Settings → Privacy &
@@ -113,6 +115,10 @@ is steadier. The setting is remembered between runs.
 - **Updating:** quit the old copy (tray → Quit), then run the new installer; the
   version bump lets it replace the previous install. Only one TypeIT runs at a
   time — launching a second copy just focuses the existing window.
+- **No taskbar/Dock button:** TypeIT runs as a background tray app (Windows:
+  `skipTaskbar`; macOS: menu-bar accessory, no Dock icon). Reach it via the
+  **tray icon** or **Ctrl+Shift+Space**. It's still an ordinary process visible
+  in Task Manager / Activity Monitor — nothing is hidden from the system.
 
 ## 4d. Logs (for troubleshooting)
 

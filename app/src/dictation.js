@@ -336,40 +336,49 @@
   // ---------------------------------------------------------------------
   var typeBtn = document.getElementById("typeBtn");
 
-  // --- Typing speed (words per minute) ---------------------------------
-  var WPM_STORE = "typeit.wpm";
-  var WPM_MIN = 10, WPM_MAX = 1000, WPM_DEFAULT = 240, WPM_STEP = 10;
-  var wpmInput = document.getElementById("wpmInput");
-  var wpmMinus = document.getElementById("wpmMinus");
-  var wpmPlus  = document.getElementById("wpmPlus");
+  // --- Typing speed range (words per minute) ---------------------------
+  // The actual per-character pace is jittered between min and max in the Rust
+  // backend, averaging near the middle for a natural, human feel.
+  var WPM_MIN_STORE = "typeit.wpm.min", WPM_MAX_STORE = "typeit.wpm.max";
+  var WPM_LO = 10, WPM_HI = 1000, DEF_MIN = 180, DEF_MAX = 220;
+  var wpmMin = document.getElementById("wpmMin");
+  var wpmMax = document.getElementById("wpmMax");
 
-  function clampWpm(n) {
-    n = Math.round(Number(n) || WPM_DEFAULT);
-    return Math.max(WPM_MIN, Math.min(WPM_MAX, n));
+  function clampWpm(n, fallback) {
+    n = Math.round(Number(n));
+    if (!isFinite(n)) n = fallback;
+    return Math.max(WPM_LO, Math.min(WPM_HI, n));
   }
-  function currentWpm() { return clampWpm(wpmInput ? wpmInput.value : WPM_DEFAULT); }
-
-  function applyWpm(n, opts) {
-    var v = clampWpm(n);
-    if (wpmInput) wpmInput.value = v;
-    try { localStorage.setItem(WPM_STORE, String(v)); } catch (_) {}
-    if (invoke) invoke("set_wpm", { wpm: v }).catch(function () {});
-    if (opts && opts.announce) setStatus(v + " wpm");
+  // Returns the ordered [min, max] currently in the fields.
+  function currentRange() {
+    var lo = clampWpm(wpmMin ? wpmMin.value : DEF_MIN, DEF_MIN);
+    var hi = clampWpm(wpmMax ? wpmMax.value : DEF_MAX, DEF_MAX);
+    return lo <= hi ? [lo, hi] : [hi, lo];
   }
 
-  if (wpmInput) {
-    // Restore the saved speed (falling back to the markup default).
-    var saved;
-    try { saved = localStorage.getItem(WPM_STORE); } catch (_) {}
-    applyWpm(saved != null ? saved : wpmInput.value);
+  function applyRange(opts) {
+    var r = currentRange();
+    if (wpmMin) wpmMin.value = r[0];
+    if (wpmMax) wpmMax.value = r[1];
+    try {
+      localStorage.setItem(WPM_MIN_STORE, String(r[0]));
+      localStorage.setItem(WPM_MAX_STORE, String(r[1]));
+    } catch (_) {}
+    if (invoke) invoke("set_speed_range", { minWpm: r[0], maxWpm: r[1] }).catch(function () {});
+    if (opts && opts.announce) setStatus(r[0] + "–" + r[1] + " wpm");
+  }
 
-    wpmInput.addEventListener("change", function () { applyWpm(wpmInput.value); });
-    wpmMinus && wpmMinus.addEventListener("click", function () {
-      applyWpm(currentWpm() - WPM_STEP, { announce: true });
-    });
-    wpmPlus && wpmPlus.addEventListener("click", function () {
-      applyWpm(currentWpm() + WPM_STEP, { announce: true });
-    });
+  if (wpmMin && wpmMax) {
+    // Restore saved range (falling back to the markup defaults).
+    try {
+      var sMin = localStorage.getItem(WPM_MIN_STORE);
+      var sMax = localStorage.getItem(WPM_MAX_STORE);
+      if (sMin != null) wpmMin.value = sMin;
+      if (sMax != null) wpmMax.value = sMax;
+    } catch (_) {}
+    applyRange();
+    wpmMin.addEventListener("change", function () { applyRange({ announce: true }); });
+    wpmMax.addEventListener("change", function () { applyRange({ announce: true }); });
   }
 
   // Keep the Rust side's copy of the transcript current (debounced), so the
@@ -390,11 +399,11 @@
       if (!text) { setStatus("Nothing to type", "error"); return; }
       if (!invoke) { setStatus("Type-it needs the desktop app", "error"); return; }
       if (listening) stop(); // don't type our own mic stream
-      var wpm = currentWpm();
+      var r = currentRange();
       setStatus("Typing…");
       try {
         await invoke("set_pending_text", { text: text });
-        await invoke("type_text", { text: text, wpm: wpm });
+        await invoke("type_text", { text: text, minWpm: r[0], maxWpm: r[1] });
         setStatus("Typed", "live");
       } catch (err) {
         setStatus("Type failed", "error");
