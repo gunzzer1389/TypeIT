@@ -70,10 +70,12 @@ frameless translucent widget appears, centered and on top. Try:
 
 ## 4b. Dictation setup (Deepgram + microphone)
 
-- **API key:** get one at https://console.deepgram.com. On first run, paste it
-  into the key bar at the top of the widget and hit **Save key**. It's stored in
-  the webview's `localStorage` on this machine and sent only to Deepgram. (A more
-  secure store — OS keychain via a Tauri command — is a planned follow-up.)
+- **API key:** open the **gear (settings)** panel → **Deepgram API key**, paste
+  your key and hit **Save**. No key yet? The **Get a Deepgram API key** button
+  there opens Deepgram in your browser. (Pressing Dictate with no key saved pops
+  the settings panel open for you.) The key is stored in the webview's
+  `localStorage` on this machine and sent only to Deepgram. (A more secure store
+  — OS keychain via a Tauri command — is a planned follow-up.)
 - **Microphone permission (macOS):** the app ships an
   `NSMicrophoneUsageDescription` (`src-tauri/Info.plist`), so macOS will prompt
   the first time you press Dictate. Approve it in the prompt (or later under

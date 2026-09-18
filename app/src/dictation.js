@@ -21,6 +21,11 @@
 
   var KEY_STORE = "typeit.deepgram.key";
   var TARGET_RATE = 16000; // what we tell Deepgram we're sending
+  var DEEPGRAM_SIGNUP = "https://console.deepgram.com/signup";
+
+  // --- Tauri bridge (undefined in a plain browser preview) --------------
+  var tauri  = window.__TAURI__;
+  var invoke = tauri && tauri.core && tauri.core.invoke;
 
   // --- Elements ---------------------------------------------------------
   var transcriptEl = document.getElementById("transcript");
@@ -30,9 +35,28 @@
   var statusEl     = document.getElementById("dictStatus");
   var clearBtn     = document.getElementById("clearBtn");
   var copyBtn      = document.getElementById("copyBtn");
-  var keyBar       = document.getElementById("keyBar");
   var keyInput     = document.getElementById("keyInput");
   var keySave      = document.getElementById("keySave");
+  var keyStatus    = document.getElementById("keyStatus");
+  var getKeyBtn    = document.getElementById("getKeyBtn");
+  var settingsPanel = document.getElementById("seethrough");
+  var gearBtn      = document.getElementById("gearBtn");
+
+  // Open an external URL in the default browser (via the Rust opener command),
+  // falling back to window.open for the browser preview.
+  async function openExternal(url) {
+    if (invoke) {
+      try { await invoke("open_url", { url: url }); return; }
+      catch (e) { console.error("open_url failed:", e); }
+    }
+    try { window.open(url, "_blank", "noopener"); } catch (_) {}
+  }
+
+  // Reveal the settings panel (where the key field lives).
+  function openSettings() {
+    if (settingsPanel) settingsPanel.setAttribute("aria-hidden", "false");
+    if (gearBtn) gearBtn.setAttribute("aria-expanded", "true");
+  }
 
   // --- Live capture state (null when idle) ------------------------------
   var stream = null;      // MediaStream from getUserMedia
@@ -53,8 +77,11 @@
   function setKey(v) {
     try { localStorage.setItem(KEY_STORE, v); } catch (_) {}
   }
-  function refreshKeyBar() {
-    if (keyBar) keyBar.hidden = !!getKey();
+  function refreshKeyUI() {
+    if (!keyStatus) return;
+    var has = !!getKey();
+    keyStatus.textContent = has ? "Key saved ✓" : "No key saved";
+    keyStatus.classList.toggle("ok", has);
   }
 
   if (keySave) {
@@ -63,7 +90,7 @@
       if (!v) { setStatus("Enter a key first", "error"); return; }
       setKey(v);
       keyInput.value = "";
-      refreshKeyBar();
+      refreshKeyUI();
       setStatus("Key saved", "live");
     });
   }
@@ -71,6 +98,9 @@
     keyInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter") keySave.click();
     });
+  }
+  if (getKeyBtn) {
+    getKeyBtn.addEventListener("click", function () { openExternal(DEEPGRAM_SIGNUP); });
   }
 
   // ---------------------------------------------------------------------
@@ -141,7 +171,7 @@
   async function start() {
     var key = getKey();
     if (!key) {
-      refreshKeyBar();
+      openSettings();
       keyInput && keyInput.focus();
       setStatus("Add your Deepgram key", "error");
       return;
@@ -303,8 +333,6 @@
   // same file still previews over http://localhost.
   // ---------------------------------------------------------------------
   var typeBtn = document.getElementById("typeBtn");
-  var tauri = window.__TAURI__;
-  var invoke = tauri && tauri.core && tauri.core.invoke;
 
   // --- Typing speed (words per minute) ---------------------------------
   var WPM_STORE = "typeit.wpm";
@@ -376,5 +404,5 @@
   // Stop cleanly if the window goes away mid-dictation.
   window.addEventListener("beforeunload", cleanup);
 
-  refreshKeyBar();
+  refreshKeyUI();
 })();

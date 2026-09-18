@@ -20,6 +20,7 @@ use std::time::Duration;
 use enigo::{Enigo, Keyboard, Settings};
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_opener::OpenerExt;
 
 /// The most recent transcript the frontend pushed down, so the global "type it"
 /// hotkey has something to type even when the webview isn't focused.
@@ -64,6 +65,15 @@ fn set_always_on_top(window: tauri::WebviewWindow, enabled: bool) -> Result<(), 
     window.set_always_on_top(enabled).map_err(|e| e.to_string())
 }
 
+/// Open a URL in the user's default browser (the "Get a Deepgram API key" link).
+/// Custom commands aren't ACL-gated, so this needs no capability entry.
+#[tauri::command]
+fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    app.opener()
+        .open_url(url, None::<String>)
+        .map_err(|e| e.to_string())
+}
+
 /// Frontend keeps this in sync with the transcript box (debounced) so the
 /// global type-it hotkey can fire without the webview being focused.
 #[tauri::command]
@@ -105,6 +115,7 @@ pub fn run() {
     let type_it = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Enter);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, shortcut, event| {
@@ -151,6 +162,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             set_always_on_top,
+            open_url,
             set_pending_text,
             set_wpm,
             type_text

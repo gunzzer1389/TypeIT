@@ -267,7 +267,19 @@
     margin-top: 6px;
   }
 
-  /* Deepgram API-key bar — shown only until a key is saved locally. */
+  /* Deepgram key section — lives in the settings popover. */
+  .dg-settings { display: flex; flex-direction: column; gap: 12px; }
+  .dg-head h2 { margin: 0 0 4px; font-size: 15px; color: var(--ink); }
+  .dg-head p  { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-dim); }
+  .dg-actions { display: flex; align-items: center; gap: 10px; }
+  .dg-status  { font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); }
+  .dg-status.ok { color: var(--good); }
+  .dg-actions .ghost-btn {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .st-divider { height: 1px; background: var(--glass-line); margin: 4px 0; }
+
   .key-bar { display: flex; gap: 8px; }
   .key-input {
     flex: 1;
@@ -657,13 +669,6 @@
     </div>
 
     <div class="win-body">
-      <!-- Deepgram API key — appears only until a key is saved (localStorage). -->
-      <div id="keyBar" class="key-bar" hidden>
-        <input id="keyInput" class="key-input" type="password" autocomplete="off"
-               spellcheck="false" placeholder="Paste your Deepgram API key to enable dictation…" />
-        <button id="keySave" class="key-save" type="button">Save key</button>
-      </div>
-
       <div class="compose">
         <textarea id="transcript" class="transcript" spellcheck="true"
           placeholder="Press Dictate and start talking — your words land here. Edit anything before you send it."></textarea>
@@ -699,7 +704,29 @@
   <!-- ============ See-through settings (from reference) ============ -->
   <!-- Now a popover: dropped from the gear icon in the titlebar and
        toggled show/hide by it. Purely in-window UI state. -->
-  <section id="seethrough" class="seethrough popover" role="dialog" aria-label="Window see-through settings" aria-hidden="false">
+  <section id="seethrough" class="seethrough popover" role="dialog" aria-label="Settings" aria-hidden="false">
+    <!-- Deepgram key lives here so it's always reachable (not just first run). -->
+    <div class="dg-settings">
+      <div class="dg-head">
+        <h2>Deepgram API key</h2>
+        <p>Powers speech-to-text. Stored only on this device and sent only to Deepgram.</p>
+      </div>
+      <div class="key-bar">
+        <input id="keyInput" class="key-input" type="password" autocomplete="off"
+               spellcheck="false" placeholder="Paste your Deepgram API key…" />
+        <button id="keySave" class="key-save" type="button">Save</button>
+      </div>
+      <div class="dg-actions">
+        <span id="keyStatus" class="dg-status">No key saved</span>
+        <button id="getKeyBtn" class="ghost-btn" type="button" title="Open Deepgram in your browser">
+          Get a Deepgram API key
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="st-divider" aria-hidden="true"></div>
+
     <div class="st-head">
       <div class="st-badge" aria-hidden="true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>

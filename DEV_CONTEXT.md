@@ -61,6 +61,20 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — Deepgram key moved into Settings + "Get a key" link
+
+- **Key management now lives in the gear/settings popover** (renamed aria-label
+  to "Settings") as a "Deepgram API key" section: password input, Save, a status
+  line ("Key saved ✓" / "No key saved"), and a **Get a Deepgram API key** button
+  → opens `https://console.deepgram.com/signup`. Removed the one-shot top key bar
+  (it vanished after first save, leaving no way to change a bad key).
+- Pressing **Dictate** with no key now opens the settings panel and focuses the
+  field instead of a dead-end error.
+- **Opening external URLs:** added `tauri-plugin-opener` + a custom `open_url`
+  command (custom commands aren't ACL-gated, so no capability entry needed);
+  frontend `openExternal()` calls it, falling back to `window.open` in the
+  browser preview.
+
 ## 2026-09-17 — Typing speed (words per minute)
 
 - **`lib.rs`** — typing is now paced: `type_string_at(text, wpm)` types one char

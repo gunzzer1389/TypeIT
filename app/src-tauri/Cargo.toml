@@ -26,6 +26,8 @@ tauri-plugin-global-shortcut = "2"
 # Cross-platform keystroke synthesis: types the reviewed text into the
 # foreground window (Windows SendInput, macOS CGEvent, Linux X11/Wayland).
 enigo = "0.2"
+# Opens external URLs (the "Get a Deepgram API key" link) in the default browser.
+tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
