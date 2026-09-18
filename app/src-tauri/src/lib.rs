@@ -450,6 +450,13 @@ fn stop_typing() {
     log::info!("stop_typing requested");
 }
 
+/// Fully quit the app (red titlebar button; also the Ctrl+Shift+Q hotkey).
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    log::info!("quit requested");
+    app.exit(0);
+}
+
 /// Application bootstrap. Called from main.rs.
 pub fn run() {
     // Show/hide this window. Ctrl+Shift+Space (plain Ctrl+Space is the IME
@@ -463,6 +470,8 @@ pub fn run() {
     let stop_it = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Backspace);
     // Resume the last interrupted pass (types only the remainder).
     let resume_it = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyR);
+    // Fully quit the app from anywhere.
+    let quit_hk = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyQ);
 
     // Log panics to the log file too, so a startup crash leaves a trace.
     std::panic::set_hook(Box::new(|info| {
@@ -516,6 +525,9 @@ pub fn run() {
                     } else if shortcut == &stop_it {
                         CANCEL.store(true, Ordering::SeqCst);
                         log::info!("stop via hotkey");
+                    } else if shortcut == &quit_hk {
+                        log::info!("quit via hotkey");
+                        app.exit(0);
                     } else if shortcut == &resume_it {
                         let text = app
                             .try_state::<Resume>()
@@ -617,6 +629,10 @@ pub fn run() {
                 Ok(_) => log::info!("registered resume (Ctrl+Shift+R)"),
                 Err(e) => log::error!("resume shortcut not registered: {e}"),
             }
+            match app.global_shortcut().register(quit_hk) {
+                Ok(_) => log::info!("registered quit (Ctrl+Shift+Q)"),
+                Err(e) => log::error!("quit shortcut not registered: {e}"),
+            }
 
             // System tray: gives the app a real Quit (window close only hides),
             // plus a Show/Hide toggle. Without a way to quit, an old instance
@@ -676,7 +692,8 @@ pub fn run() {
             set_mistakes,
             type_text,
             resume_typing,
-            stop_typing
+            stop_typing,
+            quit_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running TypeIT");

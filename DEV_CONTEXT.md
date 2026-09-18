@@ -67,6 +67,17 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — Titlebar cleanup: red=quit, yellow=hide, drop tabs/eye
+
+- Removed the non-functional **Compose/Preview tabs** and the dead **eye
+  (see-through) icon**; gear/Settings stays.
+- **Traffic lights repurposed:** red `data-win="quit"` fully quits
+  (`quit_app` command / `app.exit(0)`), yellow `data-win="hide"` hides to tray
+  (was the old red behaviour; the redundant OS-minimize is gone), green still
+  toggles always-on-top. `Ctrl+Shift+Space` still shows/hides.
+- **New global quit hotkey `Ctrl+Shift+Q`** (`quit_hk`). Quit is now reachable
+  from red dot, hotkey, or tray. Added to the Settings shortcut list.
+
 ## 2026-09-18 — Type/Stop toggle + human-like typos (mpl)
 
 - **Type it ↔ Stop toggle:** the primary button becomes a red **Stop** while a

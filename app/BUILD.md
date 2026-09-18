@@ -126,9 +126,12 @@ steadier. The range is remembered between runs.
   while typing, it stops immediately (text never lands in the wrong app) and
   reappears with a Resume prompt. Popups from the *same* app (autocomplete,
   emoji picker) don't count, so they won't interrupt typing.
-- **Quitting:** closing the window only *hides* it (reopen with the hotkey). To
-  fully quit, use the **system tray** icon → **Quit TypeIT**. Fully quitting
-  matters before installing an update, since a running copy locks its files.
+- **Titlebar dots:** red = **Quit** the app (also **Ctrl+Shift+Q**), yellow =
+  **hide to tray** (reopen with **Ctrl+Shift+Space**), green = toggle
+  always-on-top.
+- **Quitting:** the red dot, **Ctrl+Shift+Q**, or the **tray** icon → **Quit
+  TypeIT** all fully quit. Fully quitting matters before installing an update,
+  since a running copy locks its files.
 - **Updating:** quit the old copy (tray → Quit), then run the new installer; the
   version bump lets it replace the previous install. Only one TypeIT runs at a
   time — launching a second copy just focuses the existing window.

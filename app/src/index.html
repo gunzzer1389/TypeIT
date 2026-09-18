@@ -142,9 +142,9 @@
     cursor: pointer;
   }
   .lights button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .lights button[data-win="close"]    { background: #ff5f57; }
-  .lights button[data-win="minimize"] { background: #febc2e; }
-  .lights button[data-win="aot"]      { background: #28c840; }
+  .lights button[data-win="quit"] { background: #ff5f57; }
+  .lights button[data-win="hide"] { background: #febc2e; }
+  .lights button[data-win="aot"]  { background: #28c840; }
 
   .tabs {
     display: flex;
@@ -675,20 +675,13 @@
          window is frameless); the buttons inside stay clickable. -->
     <div class="titlebar" data-tauri-drag-region>
       <div class="lights">
-        <button data-win="close" title="Hide window (Ctrl+Shift+Space to show)" aria-label="Hide window"></button>
-        <button data-win="minimize" title="Minimize" aria-label="Minimize"></button>
+        <button data-win="quit" title="Quit TypeIT (Ctrl+Shift+Q)" aria-label="Quit TypeIT"></button>
+        <button data-win="hide" title="Hide to tray (Ctrl+Shift+Space to show)" aria-label="Hide to tray"></button>
         <button data-win="aot" title="Toggle always-on-top" aria-label="Toggle always-on-top"></button>
-      </div>
-      <div class="tabs" role="tablist" aria-label="Panels">
-        <button role="tab" aria-selected="true">Compose</button>
-        <button role="tab" aria-selected="false">Preview</button>
       </div>
       <span class="status-pill">● <b>Ctrl+Shift+Space</b> · show / hide</span>
       <div class="win-tools">
-        <button class="icon-btn" title="See-through" aria-label="See-through">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-        </button>
-        <button id="gearBtn" class="icon-btn" title="Window see-through settings" aria-label="Window see-through settings" aria-expanded="true" aria-controls="seethrough">
+        <button id="gearBtn" class="icon-btn" title="Settings" aria-label="Settings" aria-expanded="true" aria-controls="seethrough">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1M2 12h3m14 0h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
         </button>
       </div>
@@ -820,6 +813,7 @@
         <li><span>Type it (from the start)</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Enter</kbd></li>
         <li><span>Resume where it stopped</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>R</kbd></li>
         <li><span>Stop typing</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>⌫</kbd></li>
+        <li><span>Quit TypeIT</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Q</kbd></li>
       </ul>
     </div>
   </section>
@@ -919,10 +913,11 @@
     document.querySelectorAll('.lights button').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var action = btn.getAttribute('data-win');
-        if (action === 'close') {
-          win.hide();                          // hide, not quit — reopen with the hotkey
-        } else if (action === 'minimize') {
-          win.minimize();
+        if (action === 'quit') {
+          // Red = fully quit the app (Ctrl+Shift+Q also does this).
+          if (T.core && T.core.invoke) T.core.invoke('quit_app').catch(function () {});
+        } else if (action === 'hide') {
+          win.hide();                          // yellow = hide to tray; reopen with the hotkey
         } else if (action === 'aot') {
           aot = !aot;
           win.setAlwaysOnTop(aot);
