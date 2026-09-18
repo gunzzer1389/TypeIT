@@ -437,9 +437,11 @@
     }
   }
 
-  // Hotkey-path typing/resume reports back through an event; the button paths
-  // use the command return value below.
+  // Hotkey-path typing/resume drives the button through events (the button
+  // paths set the UI directly). "typing:start" flips Type it -> Stop;
+  // "type-outcome" flips it back and applies the result.
   if (tauri && tauri.event && tauri.event.listen) {
+    tauri.event.listen("typing:start", function () { setTypingUI(true); });
     tauri.event.listen("type-outcome", function (e) { handleOutcome(e.payload); });
   }
 

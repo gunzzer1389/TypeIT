@@ -67,6 +67,23 @@ ordinary desktop tool.
 
 ---
 
+## 2026-09-18 — Type it→Stop toggle actually visible (stay-visible typing)
+
+- **Bug:** the Type it→Stop toggle never showed because the button path *hid* the
+  window while typing, and the hotkey path never told the frontend.
+- **Fix (Windows):** instead of hiding, hand focus back to the target app and
+  keep TypeIT visible so the Stop button is usable. A watcher thread records the
+  last non-TypeIT foreground window (`LAST_EXTERNAL`, excluded by process id);
+  `bring_target_forward()` `SetForegroundWindow`s it and verifies focus left us —
+  if it can't confirm, it **falls back to hiding** (old reliable behaviour, no
+  risk of typing into the wrong place). Applied to `type_text` and
+  `resume_typing`.
+- **Hotkey path:** emits a `typing:start` event so the frontend flips the button
+  to Stop (and `type-outcome` flips it back). Button path sets the UI directly.
+- Non-Windows: `bring_target_forward` returns false → still hides (unchanged).
+- Note: staying visible means the (always-on-top) widget overlaps the target;
+  user can drag it aside. Revisit auto-reposition if it annoys.
+
 ## 2026-09-18 — Titlebar cleanup: red=quit, yellow=hide, drop tabs/eye
 
 - Removed the non-functional **Compose/Preview tabs** and the dead **eye

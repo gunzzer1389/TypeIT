@@ -215,27 +215,65 @@ struct TypeOutcome {
     remaining: String,
 }
 
-/// Process id of the window that currently has focus. We compare by *process*
-/// (not window handle) so the target app's own popups — autocomplete, emoji
-/// pickers, suggestion bars — don't look like "you switched away". 0 = unknown.
+/// The most recent non-TypeIT foreground window (HWND as isize), updated by a
+/// watcher thread on Windows. Used to hand focus back to your target app so
+/// TypeIT can stay visible (showing Stop) while it types.
+static LAST_EXTERNAL: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
+/// (foreground window HWND as isize, its process id). 0/0 = unknown.
 #[cfg(windows)]
-fn foreground_pid() -> u32 {
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowThreadProcessId,
-    };
+fn foreground() -> (isize, u32) {
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
     unsafe {
         let hwnd = GetForegroundWindow();
         if hwnd.0.is_null() {
-            return 0;
+            return (0, 0);
         }
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, Some(&mut pid as *mut u32));
-        pid
+        (hwnd.0 as isize, pid)
     }
 }
 #[cfg(not(windows))]
+fn foreground() -> (isize, u32) {
+    (0, 0) // focus-aware features are Windows-only for now
+}
+
+/// Process id of the focused window. We compare by *process* (not window
+/// handle) so the target app's own popups — autocomplete, emoji pickers — don't
+/// look like "you switched away".
 fn foreground_pid() -> u32 {
-    0 // focus-aware stop is Windows-only for now
+    foreground().1
+}
+
+/// Try to raise the target app to the foreground. True if it succeeded.
+#[cfg(windows)]
+fn set_foreground(hwnd: isize) -> bool {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+    if hwnd == 0 {
+        return false;
+    }
+    unsafe { SetForegroundWindow(HWND(hwnd as *mut core::ffi::c_void)).as_bool() }
+}
+#[cfg(not(windows))]
+fn set_foreground(_hwnd: isize) -> bool {
+    false
+}
+
+/// Before typing (button/resume path): try to focus the target app so TypeIT
+/// can stay visible with a working Stop button. Returns true if the target now
+/// has focus (stay visible); false means the caller should hide instead.
+fn bring_target_forward() -> bool {
+    let target = LAST_EXTERNAL.load(Ordering::SeqCst);
+    if target != 0 && set_foreground(target) {
+        std::thread::sleep(Duration::from_millis(150));
+        // Confirm focus actually left us before we start typing.
+        if foreground().1 != std::process::id() {
+            return true;
+        }
+    }
+    false
 }
 
 /// Synthesize `text` into the focused window one character at a time. Each
@@ -390,11 +428,17 @@ async fn type_text(
     max_wpm: u32,
     mpl: u32,
 ) -> Result<TypeOutcome, String> {
-    let _ = window.hide();
+    let win = window.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        // Give focus a beat to return to the previous app before we start, so
-        // the first characters don't get dropped.
-        std::thread::sleep(Duration::from_millis(400));
+        // Prefer keeping our window visible (so the Stop button is usable) by
+        // focusing the target app. If that can't be confirmed, fall back to
+        // hiding so focus reliably returns to the previous app.
+        if bring_target_forward() {
+            std::thread::sleep(Duration::from_millis(120));
+        } else {
+            let _ = win.hide();
+            std::thread::sleep(Duration::from_millis(400));
+        }
         type_string_range(&text, min_wpm, max_wpm, mpl)
     })
     .await
@@ -428,9 +472,14 @@ async fn resume_typing(
         .try_state::<Mistakes>()
         .and_then(|s| s.0.lock().ok().map(|g| *g))
         .unwrap_or(0);
-    let _ = window.hide();
+    let win = window.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        std::thread::sleep(Duration::from_millis(400));
+        if bring_target_forward() {
+            std::thread::sleep(Duration::from_millis(120));
+        } else {
+            let _ = win.hide();
+            std::thread::sleep(Duration::from_millis(400));
+        }
         type_string_range(&text, min_wpm, max_wpm, mpl)
     })
     .await
@@ -544,6 +593,7 @@ pub fn run() {
                                 .try_state::<Mistakes>()
                                 .and_then(|s| s.0.lock().ok().map(|g| *g))
                                 .unwrap_or(0);
+                            let _ = app.emit("typing:start", ());
                             let app_handle = app.clone();
                             std::thread::spawn(move || match type_string_range(&text, lo, hi, mpl) {
                                 Ok(outcome) => {
@@ -575,6 +625,7 @@ pub fn run() {
                             .try_state::<Mistakes>()
                             .and_then(|s| s.0.lock().ok().map(|g| *g))
                             .unwrap_or(0);
+                        let _ = app.emit("typing:start", ());
                         let app_handle = app.clone();
                         std::thread::spawn(move || match type_string_range(&text, lo, hi, mpl) {
                             Ok(outcome) => {
@@ -599,6 +650,20 @@ pub fn run() {
         .manage(Mistakes(Mutex::new(0)))
         .setup(move |app| {
             log::info!("TypeIT setup: starting");
+
+            // Windows: continuously remember the last non-TypeIT foreground
+            // window, so typing can hand focus back to it and stay visible.
+            #[cfg(windows)]
+            std::thread::spawn(|| {
+                let our_pid = std::process::id();
+                loop {
+                    std::thread::sleep(Duration::from_millis(250));
+                    let (hwnd, pid) = foreground();
+                    if hwnd != 0 && pid != 0 && pid != our_pid {
+                        LAST_EXTERNAL.store(hwnd, Ordering::SeqCst);
+                    }
+                }
+            });
 
             // macOS: run as a menu-bar (accessory) app — no Dock icon, reached
             // via the tray and the global hotkey. (Windows/Linux use the
