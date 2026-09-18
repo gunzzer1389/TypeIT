@@ -317,6 +317,42 @@
   }
   .ghost-btn:hover { color: var(--ink); }
 
+  /* Typing-speed control — words per minute, adjustable by field or steppers. */
+  .speed-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+  }
+  .speed-row label { margin-right: auto; }
+  .wpm-step {
+    width: 28px; height: 28px;
+    display: grid; place-items: center;
+    border-radius: 8px;
+    color: var(--ink);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--glass-line);
+    font-family: var(--mono); font-size: 16px; line-height: 1;
+    cursor: pointer;
+  }
+  .wpm-step:hover { background: rgba(255,255,255,0.10); }
+  .wpm-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .wpm-input {
+    width: 68px;
+    padding: 6px 8px;
+    text-align: center;
+    border-radius: var(--radius-pill);
+    background: rgba(0,0,0,0.24);
+    border: 1px solid var(--glass-line);
+    color: var(--ink);
+    font-family: var(--mono); font-size: 13px;
+    outline: none;
+  }
+  .wpm-input:focus { border-color: var(--accent); }
+  .wpm-unit { color: var(--ink-faint); }
+
   .composer-bar {
     display: flex;
     align-items: center;
@@ -632,6 +668,15 @@
         <textarea id="transcript" class="transcript" spellcheck="true"
           placeholder="Press Dictate and start talking — your words land here. Edit anything before you send it."></textarea>
         <div id="interim" class="interim" aria-live="polite"></div>
+      </div>
+
+      <div class="speed-row">
+        <label for="wpmInput">Typing speed</label>
+        <button id="wpmMinus" class="wpm-step" type="button" aria-label="Slower">−</button>
+        <input id="wpmInput" class="wpm-input" type="number" min="10" max="1000" step="10"
+               value="240" inputmode="numeric" aria-label="Typing speed in words per minute" />
+        <span class="wpm-unit">wpm</span>
+        <button id="wpmPlus" class="wpm-step" type="button" aria-label="Faster">+</button>
       </div>
 
       <div class="composer-bar">

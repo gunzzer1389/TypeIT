@@ -93,7 +93,10 @@ Two ways to send the reviewed text to another app:
 - **Ctrl+Shift+Enter** (global) — click into your target first (email, chat,
   comment box), then press it; TypeIT types the current transcript there.
 
-Keystrokes are synthesized with [`enigo`](https://crates.io/crates/enigo).
+Keystrokes are synthesized with [`enigo`](https://crates.io/crates/enigo). Set
+the pace with the **Typing speed** field (words per minute, 10–1000; −/+ to
+nudge). Higher is faster but some apps drop characters if it's too fast; lower
+is steadier. The setting is remembered between runs.
 
 - **macOS:** typing requires **Accessibility** permission. The first attempt is
   usually blocked silently — grant TypeIT under System Settings → Privacy &

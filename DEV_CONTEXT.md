@@ -51,6 +51,8 @@ ordinary desktop tool.
       can't type into elevated apps on Windows unless TypeIT is elevated.
 - [ ] **Notes history** — persist the last ~20 captures locally; UI to browse
       and re-send them.
+- [x] **Typing speed (wpm)** — input box + −/+ steppers; paces keystroke
+      delivery. Stored in `localStorage`, synced to Rust for the hotkey path.
 - [ ] User builds the shell on Windows and/or macOS (`app/BUILD.md`) and reports
       how the transparent widget looks/behaves natively.
 - [ ] Iterate visual polish based on native rendering (blur, radius, sizing).
@@ -58,6 +60,20 @@ ordinary desktop tool.
       configurable opacity hotkey.
 
 ---
+
+## 2026-09-17 — Typing speed (words per minute)
+
+- **`lib.rs`** — typing is now paced: `type_string_at(text, wpm)` types one char
+  at a time, sleeping `12_000 / wpm` ms between chars (5-chars-per-word
+  convention; wpm clamped 10–1000, default 240). New `Wpm(Mutex<u32>)` state +
+  `set_wpm` command; `type_text` takes a `wpm` arg; the hotkey path reads wpm
+  from state and now types on its own `std::thread` so paced typing never blocks
+  the app.
+- **`index.html` / `dictation.js`** — a "Typing speed" row: number input
+  (10–1000, step 10) with −/+ steppers, persisted to `localStorage` and pushed
+  to Rust on change. `Type it` passes the current wpm.
+- Higher wpm ≈ faster/less reliable in some targets; lower is steadier. Default
+  240 wpm ≈ 50 ms/char.
 
 ## 2026-09-17 — Type-into-focused-window
 

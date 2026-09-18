@@ -306,6 +306,42 @@
   var tauri = window.__TAURI__;
   var invoke = tauri && tauri.core && tauri.core.invoke;
 
+  // --- Typing speed (words per minute) ---------------------------------
+  var WPM_STORE = "typeit.wpm";
+  var WPM_MIN = 10, WPM_MAX = 1000, WPM_DEFAULT = 240, WPM_STEP = 10;
+  var wpmInput = document.getElementById("wpmInput");
+  var wpmMinus = document.getElementById("wpmMinus");
+  var wpmPlus  = document.getElementById("wpmPlus");
+
+  function clampWpm(n) {
+    n = Math.round(Number(n) || WPM_DEFAULT);
+    return Math.max(WPM_MIN, Math.min(WPM_MAX, n));
+  }
+  function currentWpm() { return clampWpm(wpmInput ? wpmInput.value : WPM_DEFAULT); }
+
+  function applyWpm(n, opts) {
+    var v = clampWpm(n);
+    if (wpmInput) wpmInput.value = v;
+    try { localStorage.setItem(WPM_STORE, String(v)); } catch (_) {}
+    if (invoke) invoke("set_wpm", { wpm: v }).catch(function () {});
+    if (opts && opts.announce) setStatus(v + " wpm");
+  }
+
+  if (wpmInput) {
+    // Restore the saved speed (falling back to the markup default).
+    var saved;
+    try { saved = localStorage.getItem(WPM_STORE); } catch (_) {}
+    applyWpm(saved != null ? saved : wpmInput.value);
+
+    wpmInput.addEventListener("change", function () { applyWpm(wpmInput.value); });
+    wpmMinus && wpmMinus.addEventListener("click", function () {
+      applyWpm(currentWpm() - WPM_STEP, { announce: true });
+    });
+    wpmPlus && wpmPlus.addEventListener("click", function () {
+      applyWpm(currentWpm() + WPM_STEP, { announce: true });
+    });
+  }
+
   // Keep the Rust side's copy of the transcript current (debounced), so the
   // global hotkey has something to type when the webview isn't focused.
   if (invoke) {
@@ -324,10 +360,11 @@
       if (!text) { setStatus("Nothing to type", "error"); return; }
       if (!invoke) { setStatus("Type-it needs the desktop app", "error"); return; }
       if (listening) stop(); // don't type our own mic stream
+      var wpm = currentWpm();
       setStatus("Typing…");
       try {
         await invoke("set_pending_text", { text: text });
-        await invoke("type_text", { text: text });
+        await invoke("type_text", { text: text, wpm: wpm });
         setStatus("Typed", "live");
       } catch (err) {
         setStatus("Type failed", "error");
